@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ألوان الهوية الأصلية للتطبيق.
+  تُستخدم في styles.xml (colorPrimary / colorPrimaryDark / colorAccent).
+  Capacitor 8 يوفّر ألواناً افتراضية في مكتبته، وهنا نتجاوزها بألوان «واصل شات»
+  لتصبح شاشة البداية (Android 12+) وعناصر النظام بلون الهوية التركوازي.
+-->
+<resources>
+    <color name="colorPrimary">#1FB09C</color>
+    <color name="colorPrimaryDark">#148D7F</color>
+    <color name="colorAccent">#1FB09C</color>
+</resources>

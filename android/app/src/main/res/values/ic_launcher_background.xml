@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- خلفية الأيقونة التكيفية (adaptive icon) — لون الهوية التركوازي،
+     والطبقة الأمامية فقاعة محادثة بيضاء (mipmap/ic_launcher_foreground). -->
+<resources>
+    <color name="ic_launcher_background">#1FB09C</color>
+</resources>
