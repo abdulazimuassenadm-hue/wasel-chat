@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { ConversationList } from '@/components/chat/ConversationList'
 import { ChatWindow } from '@/components/chat/ChatWindow'
+import { ChatLockGate } from '@/components/lock/LockOverlay'
 import { cn } from '@/lib/utils'
 
 export function ChatsPage() {
@@ -18,7 +19,13 @@ export function ChatsPage() {
       </div>
 
       <div className={cn('min-h-0 flex-1', !conversationId && 'hidden sm:flex')}>
-        <ChatWindow conversationId={conversationId ?? null} />
+        {conversationId ? (
+          <ChatLockGate conversationId={conversationId}>
+            <ChatWindow conversationId={conversationId} />
+          </ChatLockGate>
+        ) : (
+          <ChatWindow conversationId={null} />
+        )}
       </div>
     </div>
   )

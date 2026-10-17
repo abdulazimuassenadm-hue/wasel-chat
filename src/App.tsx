@@ -7,8 +7,10 @@ import { FullPageLoader } from '@/components/ui/Misc'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { CallOverlay } from '@/components/call/CallOverlay'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { LockOverlay } from '@/components/lock/LockOverlay'
 
 import { Landing } from '@/pages/Landing'
+import { Features } from '@/pages/Features'
 import { Login } from '@/pages/Login'
 import { Signup } from '@/pages/Signup'
 import { ForgotPassword } from '@/pages/ForgotPassword'
@@ -20,6 +22,7 @@ import { ChatsPage } from '@/pages/ChatsPage'
 import { StatusPage } from '@/pages/StatusPage'
 import { CallsPage } from '@/pages/CallsPage'
 import { ContactsPage } from '@/pages/ContactsPage'
+import { GroupsPage } from '@/pages/GroupsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 import { AdminLayout } from '@/pages/admin/AdminLayout'
@@ -97,6 +100,7 @@ export default function App() {
       <Routes>
         {/* الصفحات العامة */}
         <Route path="/" element={<Landing />} />
+        <Route path="/features" element={<Features />} />
         <Route
           path="/login"
           element={
@@ -127,6 +131,7 @@ export default function App() {
             <Route index element={<Navigate to="/app/chats" replace />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="chats/:conversationId" element={<ChatsPage />} />
+            <Route path="groups" element={<GroupsPage />} />
             <Route path="status" element={<StatusPage />} />
             <Route path="calls" element={<CallsPage />} />
             <Route path="contacts" element={<ContactsPage />} />
@@ -153,6 +158,9 @@ export default function App() {
 
       {/* شريط تثبيت التطبيق — يظهر فوراً في المتصفح (ويُخفى داخل التطبيق الأصلي) */}
       <InstallPrompt />
+
+      {/* قفل التطبيق — طبقة مصادقة محلية عند تفعيلها من الإعدادات */}
+      <LockOverlay />
     </>
   )
 }

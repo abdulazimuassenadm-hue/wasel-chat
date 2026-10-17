@@ -22,6 +22,8 @@ interface MessageBubbleProps {
   message: ChatMessage
   own: boolean
   isGroup: boolean
+  /** عدد بقية أعضاء المحادثة (يُستخدم لتفادي إظهار «قُرئت» في المجموعات قبل قراءة الجميع) */
+  recipientCount?: number
   sender?: PublicProfile | null
   onReply: (message: ChatMessage) => void
   onForward: (message: ChatMessage) => void
@@ -38,6 +40,7 @@ export function MessageBubble({
   message,
   own,
   isGroup,
+  recipientCount,
   sender,
   onReply,
   onForward,
@@ -70,12 +73,20 @@ export function MessageBubble({
     longPressRef.current = null
   }
 
+  // علامات القراءة: في المجموعات لا نعتبر الرسالة «مقروءة» حتى يقرأها جميع الأعضاء
+  const readReceiptCount = (message.receipts ?? []).filter((receipt) => receipt.status === 'read').length
+  const recipients = recipientCount ?? 1
+  const fullyRead = recipients > 1 ? readReceiptCount >= recipients : readReceiptCount > 0
+  const anyDelivered = (message.receipts ?? []).length > 0
+
   const renderStatus = () => {
     if (!own || deleted) return null
     if (message.pending) return <Clock className="h-3.5 w-3.5 text-white/70" aria-label={t('sending')} />
     if (message.failed) return <AlertCircle className="h-3.5 w-3.5 text-rose-200" aria-label={t('failed_to_send')} />
-    if (message.status === 'read') return <CheckCheck className="h-3.5 w-3.5 text-sky-200" aria-label={t('read')} />
-    if (message.status === 'delivered') return <CheckCheck className="h-3.5 w-3.5 text-white/80" aria-label={t('delivered')} />
+    if (fullyRead) return <CheckCheck className="h-3.5 w-3.5 text-sky-200" aria-label={t('read')} />
+    if (anyDelivered || message.status === 'delivered') {
+      return <CheckCheck className="h-3.5 w-3.5 text-white/80" aria-label={t('delivered')} />
+    }
     return <Check className="h-3.5 w-3.5 text-white/80" aria-label={t('sent')} />
   }
 
@@ -370,21 +381,36 @@ function previewText(message: ChatMessage, t: (key: string) => string): string {
 export function MessageInfoModal({
   message,
   participants,
+  recipientCount,
   onClose,
 }: {
   message: ChatMessage | null
   participants: Record<string, PublicProfile>
+  recipientCount?: number
   onClose: () => void
 }) {
   const { t, lang } = useApp()
   if (!message) return null
   const receipts = message.receipts ?? []
+  const readCount = receipts.filter((receipt) => receipt.status === 'read').length
+  const total = recipientCount ?? receipts.length
+  const summary =
+    total > 1
+      ? readCount >= total
+        ? t('all_members_read')
+        : t('read_by_count', { n: readCount, total })
+      : null
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-600 dark:text-ink-300">
         {t('sent')}: {formatTime(message.created_at, lang)}
       </p>
+      {summary && (
+        <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 dark:bg-brand-950/50 dark:text-brand-200">
+          {summary}
+        </p>
+      )}
       <div className="space-y-1.5">
         {receipts.length === 0 && <p className="text-sm text-ink-400">{t('sending')}</p>}
         {receipts.map((receipt) => (

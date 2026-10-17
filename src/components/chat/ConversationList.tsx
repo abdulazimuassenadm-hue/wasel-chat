@@ -6,36 +6,53 @@ import {
   BellOff,
   Bell,
   CheckCheck,
+  CircleDot,
   Eraser,
+  Lock,
+  LogOut,
   MoreVertical,
+  Phone,
   Pin,
   PinOff,
   Plus,
   Search,
+  Settings,
+  ShieldCheck,
   Trash2,
+  User as UserIcon,
+  Users,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
+import { useAuth } from '@/context/AuthContext'
 import { useChat } from '@/context/ChatContext'
+import { useLock } from '@/context/LockContext'
+import { useToast } from '@/context/ToastContext'
 import { Avatar } from '@/components/ui/Avatar'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { EmptyState, Spinner, UnreadBadge } from '@/components/ui/Misc'
 import { ConfirmDialog } from '@/components/ui/Modal'
+import { Logo } from '@/components/layout/NavRail'
 import { cn, formatListTime } from '@/lib/utils'
 import type { ChatConversation, ChatMessage } from '@/types'
 import { NewChatModal } from './NewChatModal'
 
-type Filter = 'all' | 'unread' | 'pinned' | 'archived'
+type Filter = 'all' | 'unread' | 'pinned' | 'archived' | 'locked'
 
-const FILTERS: Filter[] = ['all', 'unread', 'pinned', 'archived']
+const FILTERS: Filter[] = ['all', 'unread', 'pinned', 'archived', 'locked']
 
 export function ConversationList() {
   const { t, lang } = useApp()
   const chat = useChat()
+  const lock = useLock()
+  const { signOut } = useAuth()
+  const toast = useToast()
   const navigate = useNavigate()
 
   const [term, setTerm] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([])
   const [searching, setSearching] = useState(false)
@@ -61,14 +78,25 @@ export function ConversationList() {
     return () => window.clearTimeout(timeout)
   }, [term, chat])
 
+  // المحادثة مخفية إن كانت مقفلة ولم تُفتح بالرمز في هذه الجلسة
+  const hiddenByLock = (conversation: ChatConversation) =>
+    lock.isChatLocked(conversation.id) && !lock.isChatUnlocked(conversation.id)
+
   const conversations = useMemo(() => {
     const clean = term.trim().toLowerCase()
     let list = chat.conversations
-    if (filter === 'archived') list = list.filter((c) => c.membership.archived)
-    else {
-      list = list.filter((c) => !c.membership.archived)
-      if (filter === 'unread') list = list.filter((c) => c.membership.unread_count > 0)
-      if (filter === 'pinned') list = list.filter((c) => c.membership.pinned)
+
+    if (filter === 'locked') {
+      list = list.filter(hiddenByLock)
+    } else {
+      // المحادثات المقفلة مخفية من كل القوائم حتى تُفتح بالرمز
+      list = list.filter((c) => !hiddenByLock(c))
+      if (filter === 'archived') list = list.filter((c) => c.membership.archived)
+      else {
+        list = list.filter((c) => !c.membership.archived)
+        if (filter === 'unread') list = list.filter((c) => c.membership.unread_count > 0)
+        if (filter === 'pinned') list = list.filter((c) => c.membership.pinned)
+      }
     }
     if (clean.length >= 2) list = list.filter((c) => c.displayTitle.toLowerCase().includes(clean))
 
@@ -76,7 +104,7 @@ export function ConversationList() {
       if (a.membership.pinned !== b.membership.pinned) return a.membership.pinned ? -1 : 1
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
     })
-  }, [chat.conversations, filter, term])
+  }, [chat.conversations, filter, term, lock])
 
   const conversationTitle = (conversationId: string) =>
     chat.conversations.find((c) => c.id === conversationId)?.displayTitle ?? t('chats_title')
@@ -88,11 +116,21 @@ export function ConversationList() {
 
   return (
     <div className="flex h-full min-h-0 flex-col border-e border-ink-200/80 bg-white dark:border-ink-800 dark:bg-ink-900">
-      {/* رأس القائمة */}
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b border-ink-200/80 px-3 dark:border-ink-800">
-        <h1 className="flex-1 truncate text-xl font-extrabold text-ink-900 dark:text-ink-50">
-          {t('chats_title')}
-        </h1>
+      {/* شريط علوي: شعار التطبيق + البحث + قائمة الثلاث نقاط */}
+      <header className="flex h-16 shrink-0 items-center gap-1 border-b border-ink-200/80 px-3 dark:border-ink-800">
+        <Logo />
+        <div className="flex-1" />
+
+        <button
+          type="button"
+          onClick={() => setSearchOpen((value) => !value)}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-500 transition hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800"
+          aria-label={t('search')}
+          title={t('search')}
+        >
+          <Search className="h-5 w-5" />
+        </button>
+
         <button
           type="button"
           onClick={() => setShowNew(true)}
@@ -102,32 +140,76 @@ export function ConversationList() {
         >
           <Plus className="h-5 w-5" />
         </button>
+
+        <Dropdown
+          align="end"
+          trigger={() => (
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-ink-500 transition hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800"
+              aria-label={t('more')}
+              title={t('more')}
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          )}
+          items={[
+            { key: 'profile', label: t('nav_profile'), icon: <UserIcon className="h-4 w-4" />, onClick: () => navigate('/app/settings?tab=profile') },
+            { key: 'settings', label: t('nav_settings'), icon: <Settings className="h-4 w-4" />, onClick: () => navigate('/app/settings') },
+            {
+              key: 'security',
+              label: t('privacy_security'),
+              icon: <ShieldCheck className="h-4 w-4" />,
+              onClick: () => navigate('/app/settings?tab=security'),
+            },
+            { key: 'new-group', label: t('new_group'), icon: <UsersRound className="h-4 w-4" />, onClick: () => setShowNew(true) },
+            { key: 'status', label: t('nav_status'), icon: <CircleDot className="h-4 w-4" />, onClick: () => navigate('/app/status') },
+            { key: 'calls', label: t('nav_calls'), icon: <Phone className="h-4 w-4" />, onClick: () => navigate('/app/calls') },
+            { key: 'contacts', label: t('nav_contacts'), icon: <Users className="h-4 w-4" />, onClick: () => navigate('/app/contacts') },
+            {
+              key: 'logout',
+              label: t('logout'),
+              icon: <LogOut className="h-4 w-4" />,
+              danger: true,
+              onClick: async () => {
+                await signOut()
+                toast.info(t('signed_out'))
+              },
+            },
+          ]}
+        />
       </header>
 
       {/* البحث */}
-      <div className="px-3 py-2.5">
-        <div className="relative">
-          <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-ink-400" />
-          <input
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder={t('search_chats')}
-            className="wasel-input py-2.5 pe-10 ps-10"
-          />
-          {term && (
+      {(searchOpen || term) && (
+        <div className="px-3 py-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-ink-400" />
+            <input
+              autoFocus
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder={t('search_chats')}
+              className="wasel-input py-2.5 pe-10 ps-10"
+            />
             <button
               type="button"
-              onClick={() => setTerm('')}
+              onClick={() => {
+                setTerm('')
+                setSearchOpen(false)
+              }}
               className="absolute inset-y-0 end-2 my-auto flex h-7 w-7 items-center justify-center rounded-full text-ink-400 hover:bg-ink-100 dark:hover:bg-ink-800"
-              aria-label={t('clear')}
+              aria-label={t('close')}
             >
               <X className="h-4 w-4" />
             </button>
-          )}
+          </div>
         </div>
+      )}
 
-        {/* فلاتر */}
-        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      {/* الفلاتر */}
+      <div className="px-3 pb-2.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {FILTERS.map((item) => (
             <button
               key={item}
@@ -191,7 +273,7 @@ export function ConversationList() {
         {!chat.conversationsLoading && conversations.length === 0 && (
           <EmptyState
             icon={<Search className="h-7 w-7" />}
-            title={filter === 'archived' ? t('filter_archived') : t('no_chats')}
+            title={filter === 'archived' ? t('filter_archived') : filter === 'locked' ? t('no_locked_chats') : t('no_chats')}
             description={term.trim().length >= 2 ? t('no_results') : t('no_chats_hint')}
           />
         )}
@@ -290,6 +372,12 @@ export function ConversationList() {
                     label: t('mark_read'),
                     icon: <CheckCheck className="h-4 w-4" />,
                     onClick: () => void chat.openConversation(conversation.id).then(() => chat.openConversation(null)),
+                  },
+                  {
+                    key: 'lock',
+                    label: lock.isChatLocked(conversation.id) ? t('unlock_chat') : t('lock_chat'),
+                    icon: <Lock className="h-4 w-4" />,
+                    onClick: () => lock.toggleChatLock(conversation.id),
                   },
                   {
                     key: 'clear',

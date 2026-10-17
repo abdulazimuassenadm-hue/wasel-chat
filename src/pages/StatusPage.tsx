@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, CircleDot, Eye, Plus, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, CircleDot, Eye, Plus, Search, Trash2, X } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
@@ -11,7 +11,7 @@ import { EmptyState, Spinner } from '@/components/ui/Misc'
 import { PageHeader } from '@/components/layout/AppLayout'
 import * as api from '@/lib/api'
 import { cn, formatLastSeen, timeAgo } from '@/lib/utils'
-import type { Status, StatusAudience } from '@/types'
+import type { Contact, Status, StatusAudience } from '@/types'
 
 const BACKGROUNDS = [
   'from-brand-600 to-brand-800',
@@ -391,7 +391,7 @@ function StatusComposer({
   onPosted: () => void
 }) {
   const { t } = useApp()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const toast = useToast()
 
   const [type, setType] = useState<'text' | 'image' | 'video'>('text')
@@ -399,9 +399,37 @@ function StatusComposer({
   const [background, setBackground] = useState(BACKGROUNDS[0])
   const [caption, setCaption] = useState('')
   const [audience, setAudience] = useState<StatusAudience>('everyone')
+  const [audienceIds, setAudienceIds] = useState<string[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [contactTerm, setContactTerm] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // تحميل جهات الاتصال عند فتح النافذة + تهيئة الخصوصية من إعدادات المستخدم
+  useEffect(() => {
+    if (!open || !user) return
+    void api
+      .listContacts(user.id)
+      .then(setContacts)
+      .catch(() => setContacts([]))
+  }, [open, user])
+
+  useEffect(() => {
+    if (!open) return
+    const pref = profile?.privacy.status
+    setAudience(pref === 'everyone' ? 'everyone' : pref === 'nobody' ? 'selected' : 'contacts')
+  }, [open, profile])
+
+  const filteredContacts = useMemo(() => {
+    const term = contactTerm.trim().toLowerCase()
+    if (!term) return contacts
+    return contacts.filter((c) => (c.profile?.display_name ?? '').toLowerCase().includes(term))
+  }, [contacts, contactTerm])
+
+  const toggleAudience = (userId: string) => {
+    setAudienceIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
+  }
 
   const reset = () => {
     setType('text')
@@ -409,6 +437,8 @@ function StatusComposer({
     setBackground(BACKGROUNDS[0])
     setCaption('')
     setAudience('everyone')
+    setAudienceIds([])
+    setContactTerm('')
     setFile(null)
     setPreview(null)
     setBusy(false)
@@ -433,6 +463,10 @@ function StatusComposer({
       toast.error(t('no_file_selected'))
       return
     }
+    if (audience === 'selected' && !audienceIds.length) {
+      toast.error(t('choose_contacts'))
+      return
+    }
     setBusy(true)
     try {
       await api.createStatus({
@@ -442,6 +476,7 @@ function StatusComposer({
         background: type === 'text' ? background : null,
         caption: caption.trim() || null,
         audience,
+        audienceIds: audience === 'selected' || audience === 'except' ? audienceIds : undefined,
         file,
       })
       toast.success(t('status_posted'))
@@ -562,7 +597,62 @@ function StatusComposer({
       <SelectField label={t('status_who_can_see')} value={audience} onChange={(event) => setAudience(event.target.value as StatusAudience)}>
         <option value="everyone">{t('audience_everyone')}</option>
         <option value="contacts">{t('audience_contacts')}</option>
+        <option value="selected">{t('audience_selected')}</option>
+        <option value="except">{t('audience_except')}</option>
       </SelectField>
+
+      {/* اختيار جهات الاتصال للخصوصية المخصّصة (تُفرض على الخادم عبر status_audience) */}
+      {(audience === 'selected' || audience === 'except') && (
+        <div className="mt-2">
+          <label className="wasel-label">{t('choose_contacts')}</label>
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-ink-400" />
+            <input
+              value={contactTerm}
+              onChange={(event) => setContactTerm(event.target.value)}
+              placeholder={t('search_contacts')}
+              className="wasel-input py-2.5 pe-3 ps-10"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto rounded-2xl border border-ink-200 dark:border-ink-700">
+            {filteredContacts.length === 0 && (
+              <p className="px-3 py-5 text-center text-xs text-ink-500 dark:text-ink-400">{t('no_contacts')}</p>
+            )}
+            {filteredContacts.map((contact) => {
+              const selected = audienceIds.includes(contact.contact_user_id)
+              return (
+                <button
+                  key={contact.id}
+                  type="button"
+                  onClick={() => toggleAudience(contact.contact_user_id)}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-start transition hover:bg-ink-50 dark:hover:bg-ink-800/60"
+                >
+                  <Avatar
+                    src={contact.profile?.avatar_url}
+                    name={contact.profile?.display_name}
+                    id={contact.contact_user_id}
+                    size="sm"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-800 dark:text-ink-100">
+                    {contact.profile?.display_name ?? t('user')}
+                  </span>
+                  <span
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-md border',
+                      selected
+                        ? 'border-brand-600 bg-brand-600 text-white'
+                        : 'border-ink-300 dark:border-ink-600',
+                    )}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-ink-500 dark:text-ink-400">{t('selected_count', { n: audienceIds.length })}</p>
+        </div>
+      )}
     </Modal>
   )
 }

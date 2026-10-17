@@ -1,19 +1,5 @@
 import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  Languages,
-  MessageSquare,
-  Moon,
-  Phone,
-  ShieldCheck,
-  Sun,
-  Users,
-  CircleDot,
-  Paperclip,
-  Sparkles,
-} from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, Languages, Moon, Sparkles, Sun } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 
@@ -36,21 +22,6 @@ function BrandMark() {
 export function Landing() {
   const { t, lang, setLang, isDark, toggleTheme, dir } = useApp()
   const { session } = useAuth()
-
-  const features = [
-    { icon: MessageSquare, title: t('feature_chat_title'), desc: t('feature_chat_desc') },
-    { icon: Phone, title: t('feature_calls_title'), desc: t('feature_calls_desc') },
-    { icon: CircleDot, title: t('feature_status_title'), desc: t('feature_status_desc') },
-    { icon: Users, title: t('feature_groups_title'), desc: t('feature_groups_desc') },
-    { icon: ShieldCheck, title: t('feature_privacy_title'), desc: t('feature_privacy_desc') },
-    { icon: Paperclip, title: t('feature_media_title'), desc: t('feature_media_desc') },
-  ]
-
-  const steps = [
-    { title: t('how_1_title'), desc: t('how_1_desc') },
-    { title: t('how_2_title'), desc: t('how_2_desc') },
-    { title: t('how_3_title'), desc: t('how_3_desc') },
-  ]
 
   const Arrow = dir === 'rtl' ? ArrowLeft : ArrowRight
 
@@ -138,12 +109,12 @@ export function Landing() {
                 {t('cta_start')}
                 <Arrow className="h-4 w-4" />
               </Link>
-              <a
-                href="#features"
+              <Link
+                to="/features"
                 className="inline-flex items-center gap-2 rounded-2xl border border-ink-200 px-6 py-3.5 text-sm font-bold text-ink-700 transition hover:bg-ink-50 dark:border-ink-700 dark:text-ink-200 dark:hover:bg-ink-800"
               >
                 {t('cta_browse')}
-              </a>
+              </Link>
             </div>
 
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs font-semibold text-ink-500 dark:text-ink-400">
@@ -185,71 +156,20 @@ export function Landing() {
         </div>
       </section>
 
-      {/* المزايا */}
-      <section id="features" className="mx-auto max-w-6xl px-4 py-16 lg:py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-extrabold">{t('features_title')}</h2>
-          <p className="mt-3 text-sm leading-relaxed text-ink-500 dark:text-ink-400">{t('features_subtitle')}</p>
-        </div>
-
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => {
-            const Icon = feature.icon
-            return (
-              <div
-                key={feature.title}
-                className="rounded-3xl border border-ink-100 bg-white p-6 transition hover:-translate-y-1 hover:shadow-soft dark:border-ink-800 dark:bg-ink-900"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300">
-                  <Icon className="h-6 w-6" />
-                </span>
-                <h3 className="mt-4 text-base font-bold">{feature.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink-500 dark:text-ink-400">{feature.desc}</p>
-              </div>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* كيف تبدأ */}
-      <section className="bg-ink-50 py-16 dark:bg-ink-900/40 lg:py-20">
-        <div className="mx-auto max-w-6xl px-4">
-          <h2 className="text-center text-3xl font-extrabold">{t('how_title')}</h2>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {steps.map((step, index) => (
-              <div key={step.title} className="rounded-3xl border border-ink-100 bg-white p-6 dark:border-ink-800 dark:bg-ink-900">
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-600 text-base font-extrabold text-white">
-                  {index + 1}
-                </span>
-                <h3 className="mt-4 text-base font-bold">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink-500 dark:text-ink-400">{step.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* الأمان */}
-      <section className="mx-auto max-w-5xl px-4 py-16 lg:py-20">
-        <div className="overflow-hidden rounded-[2rem] border border-ink-100 bg-gradient-to-br from-brand-600 to-brand-800 p-8 text-white sm:p-12 dark:border-ink-800">
-          <ShieldCheck className="h-10 w-10" />
-          <h2 className="mt-4 text-2xl font-extrabold sm:text-3xl">{t('security_title')}</h2>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white/85">{t('security_desc')}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/signup"
-              className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-bold text-brand-700 transition hover:bg-white/90"
-            >
-              {t('cta_start')}
-              <Arrow className="h-4 w-4" />
-            </Link>
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/40 px-6 py-3 text-sm font-bold text-white transition hover:bg-white/10"
-            >
-              {t('cta_login')}
-            </Link>
-          </div>
+      {/* المزايا التفصيلية نُقلت إلى صفحة مستقلة لتبقى الواجهة الرئيسية مرتّبة */}
+      <section className="mx-auto max-w-6xl px-4 pb-16 lg:pb-20">
+        <div className="rounded-[2rem] border border-ink-100 bg-ink-50 p-8 text-center dark:border-ink-800 dark:bg-ink-900/50">
+          <h2 className="text-2xl font-extrabold">{t('features_title')}</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-ink-500 dark:text-ink-400">
+            {t('features_subtitle')}
+          </p>
+          <Link
+            to="/features"
+            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
+          >
+            {t('about_features')}
+            <Arrow className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
@@ -261,7 +181,8 @@ export function Landing() {
             <span className="text-sm font-extrabold">{t('app_name')}</span>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-semibold text-ink-500 dark:text-ink-400">
-            <a href="#features" className="hover:text-brand-600 dark:hover:text-brand-400">{t('footer_about')}</a>
+            <Link to="/features" className="hover:text-brand-600 dark:hover:text-brand-400">{t('footer_about')}</Link>
+            <Link to="/features" className="hover:text-brand-600 dark:hover:text-brand-400">{t('about_features')}</Link>
             <Link to="/login" className="hover:text-brand-600 dark:hover:text-brand-400">{t('login')}</Link>
             <Link to="/signup" className="hover:text-brand-600 dark:hover:text-brand-400">{t('signup')}</Link>
           </nav>

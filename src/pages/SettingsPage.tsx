@@ -6,6 +6,7 @@ import {
   Camera,
   Check,
   Languages,
+  Lock,
   LogOut,
   Monitor,
   Moon,
@@ -25,17 +26,19 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { SelectField, Switch, TextArea, TextField } from '@/components/ui/Field'
 import { EmptyState, FullPageLoader, SectionCard, Spinner } from '@/components/ui/Misc'
 import { PageHeader } from '@/components/layout/AppLayout'
+import { SecuritySection } from '@/components/settings/SecuritySection'
 import * as api from '@/lib/api'
 import { isAllowedFile, UPLOAD_LIMITS, VAPID_PUBLIC_KEY } from '@/lib/supabase'
 import { cn, errorKey, isValidUsername } from '@/lib/utils'
 import type { PrivacySettings, PublicProfile, ThemeMode, Visibility } from '@/types'
 
-type TabKey = 'profile' | 'appearance' | 'privacy' | 'notifications' | 'blocked' | 'sessions' | 'danger'
+type TabKey = 'profile' | 'appearance' | 'privacy' | 'security' | 'notifications' | 'blocked' | 'sessions' | 'danger'
 
 const TABS: Array<{ key: TabKey; icon: typeof UserIcon; labelKey: string }> = [
   { key: 'profile', icon: UserIcon, labelKey: 'profile_title' },
   { key: 'appearance', icon: Palette, labelKey: 'appearance' },
   { key: 'privacy', icon: ShieldCheck, labelKey: 'privacy_settings' },
+  { key: 'security', icon: Lock, labelKey: 'privacy_security' },
   { key: 'notifications', icon: Bell, labelKey: 'notifications_settings' },
   { key: 'blocked', icon: Ban, labelKey: 'blocked_users' },
   { key: 'sessions', icon: UserCog, labelKey: 'sessions' },
@@ -88,6 +91,7 @@ export function SettingsPage() {
             {active === 'profile' && <ProfileSection />}
             {active === 'appearance' && <AppearanceSection />}
             {active === 'privacy' && <PrivacySection />}
+            {active === 'security' && <SecuritySection />}
             {active === 'notifications' && <NotificationsSection />}
             {active === 'blocked' && <BlockedSection />}
             {active === 'sessions' && <SessionsSection />}
@@ -413,6 +417,7 @@ function PrivacySection() {
             checked={privacy.read_receipts}
             onChange={(value) => void patch({ read_receipts: value })}
           />
+          <p className="mt-2 text-xs leading-relaxed text-ink-400 dark:text-ink-500">{t('read_receipts_note')}</p>
         </div>
       </div>
     </SectionCard>

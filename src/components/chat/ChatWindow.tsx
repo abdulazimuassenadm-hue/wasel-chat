@@ -27,6 +27,8 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
   const conversation = chat.activeConversation
   const messages = chat.activeMessages
   const participants = conversation?.profiles ?? {}
+  // عدد المستلمين باستثناء المرسل — يُستخدم لتحديد «قُرئت» في المجموعات
+  const recipientCount = Math.max(0, (conversation?.members.length ?? 1) - 1)
 
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [editing, setEditing] = useState<ChatMessage | null>(null)
@@ -325,6 +327,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                         message={message}
                         own={own}
                         isGroup={isGroup}
+                        recipientCount={recipientCount}
                         sender={message.sender_id ? participants[message.sender_id] ?? null : null}
                         currentUserId={currentUserId}
                         onReply={(target) => {
@@ -410,7 +413,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
       />
       <MediaLightbox url={lightbox?.url ?? null} name={lightbox?.name} onClose={() => setLightbox(null)} />
       {infoMessage && (
-        <InfoModalWrapper message={infoMessage} participants={participants} onClose={() => setInfoMessage(null)} />
+        <InfoModalWrapper message={infoMessage} participants={participants} recipientCount={recipientCount} onClose={() => setInfoMessage(null)} />
       )}
     </div>
   )
@@ -419,10 +422,12 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 function InfoModalWrapper({
   message,
   participants,
+  recipientCount,
   onClose,
 }: {
   message: ChatMessage
   participants: Record<string, PublicProfile>
+  recipientCount?: number
   onClose: () => void
 }) {
   const { t } = useApp()
@@ -436,7 +441,7 @@ function InfoModalWrapper({
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="mb-3 text-lg font-bold text-ink-900 dark:text-ink-50">{t('message_info')}</h2>
-        <MessageInfoModal message={message} participants={participants} onClose={onClose} />
+        <MessageInfoModal message={message} participants={participants} recipientCount={recipientCount} onClose={onClose} />
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import { initDeepLinks } from '@/lib/deepLinks'
 import { ToastProvider } from '@/context/ToastContext'
 import { AppProvider } from '@/context/AppContext'
 import { AuthProvider } from '@/context/AuthContext'
+import { LockProvider } from '@/context/LockContext'
 import { ChatProvider } from '@/context/ChatContext'
 import { CallProvider } from '@/context/CallContext'
 
@@ -42,17 +43,19 @@ if (
 
 createRoot(container).render(
   <StrictMode>
-    {/* ترتيب المزوّدات مهم: الثيم/اللغة ← الإشعارات ← المصادقة ← المحادثات ← المكالمات */}
+    {/* ترتيب المزوّدات مهم: الثيم/اللغة ← الإشعارات ← المصادقة ← القفل ← المحادثات ← المكالمات */}
     <AppProvider>
       <ToastProvider>
         <AuthProvider>
-          <ChatProvider>
-            <CallProvider>
-              <HashRouter>
-                <App />
-              </HashRouter>
-            </CallProvider>
-          </ChatProvider>
+          <LockProvider>
+            <ChatProvider>
+              <CallProvider>
+                <HashRouter>
+                  <App />
+                </HashRouter>
+              </CallProvider>
+            </ChatProvider>
+          </LockProvider>
         </AuthProvider>
       </ToastProvider>
     </AppProvider>

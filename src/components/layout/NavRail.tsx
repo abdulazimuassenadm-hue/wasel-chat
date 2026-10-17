@@ -8,9 +8,11 @@ import {
   Moon,
   Phone,
   Settings,
+  ShieldCheck,
   Sun,
   User as UserIcon,
   Users,
+  UsersRound,
   CircleDot,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
@@ -168,6 +170,7 @@ export function NavRail() {
 
       <NavItem to="/app/chats" icon={<MessageSquare className="h-5 w-5" />} label={t('nav_chats')} badge={totalUnread} />
       <NavItem to="/app/status" icon={<CircleDot className="h-5 w-5" />} label={t('nav_status')} />
+      <NavItem to="/app/groups" icon={<UsersRound className="h-5 w-5" />} label={t('nav_groups')} />
       <NavItem to="/app/calls" icon={<Phone className="h-5 w-5" />} label={t('nav_calls')} />
       <NavItem to="/app/contacts" icon={<Users className="h-5 w-5" />} label={t('nav_contacts')} />
 
@@ -211,6 +214,12 @@ export function NavRail() {
             onClick: () => navigate('/app/settings'),
           },
           {
+            key: 'security',
+            label: t('privacy_security'),
+            icon: <ShieldCheck className="h-4 w-4" />,
+            onClick: () => navigate('/app/settings?tab=security'),
+          },
+          {
             key: 'lang',
             label: lang === 'ar' ? t('english') : t('arabic'),
             icon: <span className="text-xs font-bold">ع/EN</span>,
@@ -249,8 +258,8 @@ export function BottomNav() {
   const items = [
     { to: '/app/chats', icon: <MessageSquare className="h-5 w-5" />, label: t('nav_chats'), badge: totalUnread },
     { to: '/app/status', icon: <CircleDot className="h-5 w-5" />, label: t('nav_status') },
+    { to: '/app/groups', icon: <UsersRound className="h-5 w-5" />, label: t('nav_groups') },
     { to: '/app/calls', icon: <Phone className="h-5 w-5" />, label: t('nav_calls') },
-    { to: '/app/contacts', icon: <Users className="h-5 w-5" />, label: t('nav_contacts') },
     { to: '/app/settings', icon: <Settings className="h-5 w-5" />, label: t('nav_settings') },
   ]
 
