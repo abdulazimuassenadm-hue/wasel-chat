@@ -30,10 +30,13 @@ import { PageHeader } from '@/components/layout/AppLayout'
 import { SecuritySection } from '@/components/settings/SecuritySection'
 import { AccountsSection } from '@/components/account/AccountSwitcher'
 import {
-  clearHiddenIdentity,
   getHiddenIdentity,
   isNameHidden,
-  setHiddenIdentity,
+  isUsernameHidden,
+  markNameHidden,
+  markUsernameHidden,
+  unmarkNameHidden,
+  unmarkUsernameHidden,
 } from '@/lib/namePrivacy'
 import * as api from '@/lib/api'
 import { isAllowedFile, UPLOAD_LIMITS, VAPID_PUBLIC_KEY } from '@/lib/supabase'
@@ -447,73 +450,83 @@ function NamePrivacySection() {
   const { t } = useApp()
   const { user, publicProfile, updatePublicPatch } = useAuth()
   const toast = useToast()
-  const [saving, setSaving] = useState(false)
+  const [busy, setBusy] = useState<'name' | 'username' | null>(null)
 
-  const hidden = isNameHidden(user?.id)
+  const nameHidden = isNameHidden(user?.id)
+  const usernameHidden = isUsernameHidden(user?.id)
   const alias = t('hide_name_alias')
 
-  const toggle = async (value: boolean) => {
+  const toggleName = async (value: boolean) => {
     if (!user) return
-    if (!value) {
-      // إظهار الاسم من جديد من النسخة المحفوظة محلياً
-      const saved = getHiddenIdentity(user.id)
-      if (!saved?.displayName) {
-        toast.error(t('hide_name_restore_missing'))
+    setBusy('name')
+    try {
+      if (!value) {
+        const saved = getHiddenIdentity(user.id)
+        if (!saved?.nameOriginal) {
+          toast.error(t('hide_name_restore_missing'))
+          return
+        }
+        await updatePublicPatch({ display_name: saved.nameOriginal })
+        unmarkNameHidden(user.id)
+        toast.success(t('hide_name_off'))
         return
       }
-      setSaving(true)
-      try {
-        await updatePublicPatch({
-          display_name: saved.displayName,
-          username: saved.username ?? null,
-        })
-        clearHiddenIdentity(user.id)
-        toast.success(t('hide_name_off'))
-      } catch (error) {
-        toast.error(t(errorKey(error)) || t('hide_name_failed'))
-      } finally {
-        setSaving(false)
-      }
-      return
-    }
-
-    if (!publicProfile) return
-    setSaving(true)
-    try {
-      // نحفظ الاسم الحالي محلياً قبل تغييره
-      setHiddenIdentity(user.id, {
-        displayName: publicProfile.display_name,
-        username: publicProfile.username,
-      })
-      await updatePublicPatch({ display_name: alias, username: null })
+      if (!publicProfile) return
+      markNameHidden(user.id, publicProfile.display_name)
+      await updatePublicPatch({ display_name: alias })
       toast.success(t('hide_name_on'))
     } catch (error) {
-      clearHiddenIdentity(user.id)
       toast.error(t(errorKey(error)) || t('hide_name_failed'))
     } finally {
-      setSaving(false)
+      setBusy(null)
+    }
+  }
+
+  const toggleUsername = async (value: boolean) => {
+    if (!user) return
+    setBusy('username')
+    try {
+      if (!value) {
+        const saved = getHiddenIdentity(user.id)
+        await updatePublicPatch({ username: saved?.usernameOriginal ?? null })
+        unmarkUsernameHidden(user.id)
+        toast.success(t('hide_username_off'))
+        return
+      }
+      if (!publicProfile) return
+      if (!publicProfile.username) {
+        toast.error(t('hide_username_none'))
+        return
+      }
+      markUsernameHidden(user.id, publicProfile.username)
+      await updatePublicPatch({ username: null })
+      toast.success(t('hide_username_on'))
+    } catch (error) {
+      toast.error(t(errorKey(error)) || t('hide_name_failed'))
+    } finally {
+      setBusy(null)
     }
   }
 
   return (
     <SectionCard title={t('name_privacy_title')} description={t('name_privacy_desc')}>
-      <div className={cn(saving && 'opacity-70')}>
+      <div className={cn('space-y-4', busy && 'opacity-70')}>
         <Switch
           label={t('hide_name_toggle')}
           hint={t('hide_name_hint', { alias })}
-          checked={hidden}
-          onChange={(value) => void toggle(value)}
+          checked={nameHidden}
+          onChange={(value) => void toggleName(value)}
+        />
+        <Switch
+          label={t('hide_username_toggle')}
+          hint={t('hide_username_hint')}
+          checked={usernameHidden}
+          onChange={(value) => void toggleUsername(value)}
         />
       </div>
-      <p className="mt-3 border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-500 dark:border-ink-800 dark:text-ink-400">
-        {t('hide_name_note', { alias })}
+      <p className="mt-4 border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-500 dark:border-ink-800 dark:text-ink-400">
+        {t('hide_name_note')}
       </p>
-      {hidden && (
-        <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-brand-700 dark:text-brand-300">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          {t('hide_name_active_note')}
-        </p>
-      )}
     </SectionCard>
   )
 }

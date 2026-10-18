@@ -630,16 +630,20 @@ const ar: Record<string, string> = {
 
   // إخفاء الاسم / اسم المستخدم
   name_privacy_title: 'إخفاء الاسم',
-  name_privacy_desc: 'أخفِ اسمك واسم المستخدم عن الآخرين، وأظهرهما متى شئت.',
-  hide_name_toggle: 'إخفاء اسمي واسم المستخدم عن الآخرين',
-  hide_name_hint: 'سيظهر اسمك للآخرين كـ «{alias}» ويُزال اسم المستخدم (@) من ملفك.',
-  hide_name_on: 'تم إخفاء اسمك واسم المستخدم.',
+  name_privacy_desc: 'أخفِ اسمك الظاهر واسم المستخدم (@) عن الآخرين، وأظهرهما متى شئت.',
+  hide_name_toggle: 'إخفاء الاسم الظاهر عن الآخرين',
+  hide_name_hint: 'سيظهر اسمك للآخرين كـ «{alias}» بدلاً من اسمك الحقيقي.',
+  hide_username_toggle: 'إخفاء اسم المستخدم (@) من ملفي',
+  hide_username_hint: 'لن يظهر اسم المستخدم (@) للآخرين في الملف الشخصي ولا في نتائج البحث.',
+  hide_name_on: 'تم إخفاء اسمك الظاهر.',
   hide_name_off: 'تم إظهار اسمك من جديد.',
+  hide_username_on: 'تم إخفاء اسم المستخدم (@).',
+  hide_username_off: 'تم إظهار اسم المستخدم (@) من جديد.',
+  hide_username_none: 'لا يوجد اسم مستخدم محفوظ لحذفه، يمكنك تعيينه من تبويب «الملف الشخصي».',
   hide_name_alias: 'مستخدم واصل',
   hide_name_note:
-    'الإخفاء يُطبّق على مستوى الحساب: يرى الآخرون الاسم البديل «{alias}» ولا يظهر اسم المستخدم (@). يُحفظ اسمك الأصلي على هذا الجهاز فقط لتعود إليه بنقرة واحدة.',
+    'الإخفاء يُطبَّق على مستوى الحساب: يراه الآخرون على أجهزتهم أيضاً. يُحفظ اسمك الأصلي على هذا الجهاز فقط لتعود إليه بنقرة واحدة.',
   hide_name_restore_missing: 'لم نجد اسمك الأصلي على هذا الجهاز — اكتبه من تبويب «الملف الشخصي».',
-  hide_name_active_note: 'اسمك مُخفى حالياً على جميع الأجهزة.',
   hide_name_failed: 'تعذّر تحديث إعدادات الاسم.',
 }
 
@@ -1251,16 +1255,20 @@ const en: Record<string, string> = {
 
   // Hide name / username
   name_privacy_title: 'Hide name',
-  name_privacy_desc: 'Hide your name and username from others, and show them again anytime.',
-  hide_name_toggle: 'Hide my name and username from others',
-  hide_name_hint: 'Others will see your name as "{alias}" and your username (@) is removed from your profile.',
-  hide_name_on: 'Your name and username were hidden.',
+  name_privacy_desc: 'Hide your displayed name and username (@) from others, and show them again anytime.',
+  hide_name_toggle: 'Hide my displayed name from others',
+  hide_name_hint: 'Others will see your name as "{alias}" instead of your real name.',
+  hide_username_toggle: 'Hide the username (@) from my profile',
+  hide_username_hint: 'Your username (@) will not be shown to others in the profile or in search results.',
+  hide_name_on: 'Your displayed name was hidden.',
   hide_name_off: 'Your name is visible again.',
+  hide_username_on: 'Your username (@) was hidden.',
+  hide_username_off: 'Your username (@) is visible again.',
+  hide_username_none: 'There is no saved username to remove — you can set one in the "Profile" tab.',
   hide_name_alias: 'Wasel user',
   hide_name_note:
-    'Hiding applies to the whole account: others see the alias "{alias}" and your username (@) is not shown. Your original name is stored on this device only so you can restore it with one tap.',
+    'Hiding applies to the whole account: others see it on their devices too. Your original name is stored on this device only so you can restore it with one tap.',
   hide_name_restore_missing: 'We could not find your original name on this device — type it in the "Profile" tab.',
-  hide_name_active_note: 'Your name is currently hidden on all devices.',
   hide_name_failed: 'Could not update your name settings.',
 }
 
