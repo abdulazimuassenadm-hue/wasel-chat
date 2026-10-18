@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#148d7f" />
+    <meta
+      name="description"
+      content="واصل شات — منصة مراسلة فورية حديثة: محادثات فورية، مكالمات صوتية ومرئية، حالات، مجموعات، ومشاركة ملفات بأمان."
+    />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>واصل شات | Wasel Chat</title>
+    <script>
+      // منع وميض الثيم: نطبّق الثيم المحفوظ قبل رسم الصفحة
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('wasel.theme')
+          var dark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.classList.toggle('light', !dark)
+          var lang = localStorage.getItem('wasel.lang')
+          if (lang === 'en') {
+            document.documentElement.lang = 'en'
+            document.documentElement.dir = 'ltr'
+          }
+        } catch (e) {}
+      })()
+    </script>
+    <script type="module" crossorigin src="./assets/index-quKtzBja.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Dri_FYvo.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
