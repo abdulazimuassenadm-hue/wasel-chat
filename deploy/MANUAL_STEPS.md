@@ -33,6 +33,34 @@
 بعد ذلك يعمل زر Google مباشرة، لأن الكود يستدعي `supabase.auth.signInWithOAuth({ provider: 'google' })` فعلياً
 (الملف `src/context/AuthContext.tsx`)، ولا حاجة لأي تعديل برمجي.
 
+### ج) فحص تلقائي أُضيف في الكود (لا يحتاج إعداداً)
+قبل إعادة توجيه المستخدم، يقرأ التطبيق الواجهة العامة `GET /auth/v1/settings`
+ويتأكد أن `external.google === true`. إن كان مُعطّلاً تظهر رسالة عربية واضحة
+في صفحة الدخول/إنشاء الحساب بدل صفحة JSON خام من Supabase:
+> «تسجيل الدخول عبر Google غير مُفعّل في إعدادات المشروع حالياً…»
+
+وإن فشل هذا الفحص لأي سبب، يسمح التطبيق بالمحاولة كالمعتاد (لا يُعطّل تسجيل الدخول).
+
+### د) قائمة تحقّق بعد التفعيل (دقيقتان)
+1. افتح `https://abdulazimuassenadm-hue.github.io/wasel-chat/#/login`.
+2. اضغط **Google** → يجب أن تنتقل إلى شاشة اختيار حساب Google (لا رسالة تعطيل).
+3. اختر الحساب → يجب أن تعود إلى `https://…/wasel-chat/` **مع جلسة فعّالة**
+   (يوجّهك التطبيق إلى `/app/chats`، ويظهر اسمك/صورتك).
+4. تحقّق من الظهور في Supabase → Authentication → **Users** (مستخدم جديد بمزوّد `google`).
+5. إن ظهر بدل ذلك `redirect_uri_mismatch` من Google: راجع الخطوة (3) أعلاه —
+   يجب أن يكون الـredirect URI هو `https://vtmkdnybcvgwxptjaasz.supabase.co/auth/v1/callback` **بالضبط**.
+
+### هـ) حالة هذه الآلة (مُتحقَّق منها فعلياً — لا يوجد ما يُنفَّذ محلياً)
+| المطلوب لتشغيل Google | الحالة |
+|---|---|
+| Google OAuth Client ID / Secret | **غير موجودة** (لا `gcloud`، لا `client_secret*.json`، لا `GOOGLE_CLIENT_*`) |
+| رمز إدارة Supabase (Management API) | **غير موجود** (لا `supabase` CLI، لا `~/.supabase/access-token`، لا `SUPABASE_ACCESS_TOKEN`) |
+| مزوّد Google في Supabase | `external.google = false` |
+| الصلاحية المتاحة للكود | مفتاح `sb_publishable_…` العام فقط (لا يمكنه تفعيل أي مزوّد) |
+
+لذلك تفعيل Google **يستلزم خطوتين بشريتين** على لوحتين خارجيتين (Google Cloud ثم Supabase)،
+ولا يمكن تنفيذه من المستودع أو من سطر الأوامر.
+
 ## 2) تأكيد البريد — السبب الجذري المؤكد لمشكلة «يرجى تأكيد بريدك»
 
 الدليل الفعلي (فحص مباشر لنقطة تحقق Supabase برمز غير صالح، دون كشف أي بيانات):
