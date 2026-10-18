@@ -33,9 +33,38 @@
 بعد ذلك يعمل زر Google مباشرة، لأن الكود يستدعي `supabase.auth.signInWithOAuth({ provider: 'google' })` فعلياً
 (الملف `src/context/AuthContext.tsx`)، ولا حاجة لأي تعديل برمجي.
 
-## 2) تأكيد البريد واستعادة كلمة المرور
-- Authentication → URL Configuration → Redirect URLs يجب أن تحتوي `https://abdulazimuassenadm-hue.github.io/wasel-chat/**`
-  (الكود يمرّر `redirectTo = <origin><path>#/login` أو `#/reset-password`).
+## 2) تأكيد البريد — السبب الجذري المؤكد لمشكلة «يرجى تأكيد بريدك»
+
+الدليل الفعلي (فحص مباشر لنقطة تحقق Supabase برمز غير صالح، دون كشف أي بيانات):
+```
+GET https://vtmkdnybcvgwxptjaasz.supabase.co/auth/v1/verify?token=...&type=signup
+    &redirect_to=https://abdulazimuassenadm-hue.github.io/wasel-chat/
+→ 303 Location: http://localhost:3000#error=access_denied&error_code=otp_expired...
+```
+أي أن Supabase **تجاهل** `redirect_to` الخاص بموقعنا واستخدم **Site URL الافتراضي `http://localhost:3000`**.
+هذا يعني أن رابط التأكيد يعيد المستخدم إلى `localhost` (صفحة غير موجودة) بدل الموقع المنشور.
+
+**الإصلاح المطلوب (خارجي — في Supabase فقط):**
+1. Authentication → **URL Configuration** → **Site URL**:
+   ```
+   https://abdulazimuassenadm-hue.github.io/wasel-chat/
+   ```
+2. **Redirect URLs** — أضف:
+   ```
+   https://abdulazimuassenadm-hue.github.io/wasel-chat/**
+   http://localhost:5173/**
+   wasel://auth-callback
+   ```
+
+بعد ذلك: رابط التأكيد والاستعادة يعودان إلى الموقع مباشرة، ويتولّى الكود
+(`src/lib/authCallback.ts`) إنشاء الجلسة والتوجيه الصحيح.
+
+> ملاحظة: تم إصلاح جانب الكود بالكامل (كان يعتمد على صيغة `#/login#access_token=...`
+> التي لا يفهمها محلّل supabase-js). متبقٍ فقط هذا الإعداد الخارجي.
+
+## 2.1) استعادة كلمة المرور
+- تستخدم نفس إعداد `Redirect URLs` أعلاه.
+- الكود يوجّه تلقائياً إلى `/reset-password` عند عودة رابط الاستعادة (حدث PASSWORD_RECOVERY).
 - مزوّد البريد مُفعّل حالياً وواجهة الدخول ترجع `invalid_credentials` بشكل صحيح (مُتحقَّق منه فعلياً).
 
 ## 3) تطبيق Android لاحقاً (غير مطلوب الآن)
