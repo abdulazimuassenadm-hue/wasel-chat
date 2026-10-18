@@ -160,6 +160,15 @@ const ar: Record<string, string> = {
   too_many_attempts: 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.',
   account_suspended: 'تم إيقاف هذا الحساب. تواصل مع فريق الدعم.',
   email_not_confirmed: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
+  email_not_confirmed_hint:
+    'حسابك موجود لكن البريد لم يُؤكَّد بعد. اطلب رابط تأكيد جديداً ثم افتحه من نفس المتصفح.',
+  resend_confirm_email: 'إعادة إرسال رابط التأكيد',
+  resend_confirm_sent: 'أرسلنا رابط تأكيد جديداً إلى بريدك. افتحه لإكمال التفعيل.',
+  auth_link_expired: 'انتهت صلاحية رابط التأكيد أو استُخدم من قبل. اطلب رابطاً جديداً بالأسفل.',
+  auth_link_invalid: 'رابط التأكيد غير صالح أو لا يخص هذا الموقع.',
+  auth_callback_failed: 'تعذّر إكمال تسجيل الدخول من الرابط. جرّب تسجيل الدخول بالبريد وكلمة المرور.',
+  auth_provider_not_enabled:
+    'تسجيل الدخول عبر Google غير مُفعّل في إعدادات المشروع حالياً. استخدم البريد وكلمة المرور، أو فعّل المزوّد من لوحة Supabase (راجع deploy/MANUAL_STEPS.md).',
   show_password: 'إظهار كلمة المرور',
   hide_password: 'إخفاء كلمة المرور',
   change_password: 'تغيير كلمة المرور',
@@ -737,6 +746,15 @@ const en: Record<string, string> = {
   too_many_attempts: 'Too many attempts. Please wait and try again.',
   account_suspended: 'This account has been suspended. Please contact support.',
   email_not_confirmed: 'Please confirm your email address first.',
+  email_not_confirmed_hint:
+    'Your account exists but the email is not confirmed yet. Request a new confirmation link and open it in the same browser.',
+  resend_confirm_email: 'Resend confirmation link',
+  resend_confirm_sent: 'We sent a new confirmation link to your email. Open it to finish activation.',
+  auth_link_expired: 'This confirmation link has expired or was already used. Request a new one below.',
+  auth_link_invalid: 'This confirmation link is invalid or does not belong to this site.',
+  auth_callback_failed: 'We could not complete sign-in from that link. Try signing in with email and password.',
+  auth_provider_not_enabled:
+    'Google sign-in is not enabled in the project settings yet. Use email and password, or enable the provider in the Supabase dashboard (see deploy/MANUAL_STEPS.md).',
   show_password: 'Show password',
   hide_password: 'Hide password',
   change_password: 'Change password',

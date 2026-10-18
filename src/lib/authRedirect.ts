@@ -1,10 +1,10 @@
 import { isNative } from './platform'
 
 /**
- * رابط إعادة التوجيه المخصّص للتطبيق الأصلي.
+ * رابط إعادة التوجيه المخصّص للتطبيق الأصلي (Android).
  *
  * يجب تسجيل هذا المخطط (wasel) في:
- * - AndroidManifest.xml داخل intent-filter عند إنشاء مجلد android/
+ * - AndroidManifest.xml داخل intent-filter عند بناء تطبيق Android
  * - Supabase → Authentication → URL Configuration → Redirect URLs
  */
 export const NATIVE_AUTH_CALLBACK = 'wasel://auth-callback'
@@ -13,21 +13,22 @@ export const NATIVE_AUTH_CALLBACK = 'wasel://auth-callback'
 export const NATIVE_AUTH_SCHEME = 'wasel'
 
 /**
- * يبني رابط إعادة التوجيه المناسب للبيئة الحالية.
+ * الرابط الأساسي للتطبيق في المتصفح، بلا `#` إطلاقاً.
  *
- * - **الويب**: نفس سلوك المشروع السابق حرفياً:
- *   `${origin}${pathname}#/route` (مثال: http://localhost:5173/#/login)
- * - **التطبيق الأصلي**: مخطط مخصّص يعيد فتح التطبيق:
- *   `wasel://auth-callback`
+ * سبب عدم إضافة مسار داخلي مثل `#/login`:
+ * Supabase يُلحق رموز الجلسة بجزء `#`، فلو أرسلنا `...#/login` لصار الرابط
+ * العائد `...#/login#access_token=...` وهو شكل لا يفهمه محلّل supabase-js
+ * (راجع src/lib/authCallback.ts). إرسال الرابط الأساسي فقط يجعل الصيغة قياسية:
+ * `...#access_token=...` أو `...?code=...`، ثم يتولّى مُعالجنا توجيه المستخدم.
  *
- * ملاحظة: في الوضع الأصلي لا نحتاج تمرير المسار داخل الرابط، لأن الوجهة
- * تُستنتج من نوع العملية (type) عند العودة — راجع src/lib/deepLinks.ts.
- *
- * @param route مسار داخلي بصيغة HashRouter مثل "/login" أو "/reset-password"
+ * مثال: https://abdulazimuassenadm-hue.github.io/wasel-chat/
  */
-export function authRedirectUrl(route: string): string {
+export function authRedirectUrl(): string {
   if (isNative) return NATIVE_AUTH_CALLBACK
-  const normalized = route.startsWith('/') ? route : `/${route}`
-  const base = `${window.location.origin}${window.location.pathname}`
-  return `${base}#${normalized}`
+  const { origin, pathname } = window.location
+  let path = pathname
+  // لو كان الرابط ينتهي باسم ملف (index.html) نُبقي المجلد فقط
+  if (path.endsWith('.html')) path = path.slice(0, path.lastIndexOf('/') + 1)
+  if (!path.endsWith('/')) path = `${path}/`
+  return `${origin}${path}`
 }

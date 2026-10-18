@@ -42,6 +42,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>
   signOutEverywhere: () => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
+  resendConfirmation: (email: string) => Promise<void>
   updatePassword: (password: string) => Promise<void>
   updateProfilePatch: (patch: Partial<Profile>) => Promise<void>
   updatePublicPatch: (patch: Partial<PublicProfile>) => Promise<void>
@@ -109,7 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPublicProfile(null)
       }
       if (event === 'PASSWORD_RECOVERY') {
-        // المستخدم وصل عبر رابط استعادة كلمة المرور — الواجهة تُظهر صفحة التعيين
+        // المستخدم وصل عبر رابط استعادة كلمة المرور — نوجّهه إلى صفحة تعيين كلمة المرور
+        if (window.location.hash !== '#/reset-password') {
+          window.location.hash = '#/reset-password'
+        }
       }
     })
 
@@ -153,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           password,
           options: {
             data: { display_name: displayName.trim() },
-            emailRedirectTo: authRedirectUrl('/login'),
+            emailRedirectTo: authRedirectUrl(),
           },
         })
         if (error) throw error
@@ -206,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: authRedirectUrl('/app'),
+          redirectTo: authRedirectUrl(),
           // الويب: يتولّى Supabase إعادة التوجيه بنفسه (السلوك السابق دون تغيير).
           // الأصلي: نمنع إعادة التوجيه داخل الـWebView ونفتح المتصفح الخارجي بأنفسنا.
           skipBrowserRedirect: isNative,
@@ -239,7 +243,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true)
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: authRedirectUrl('/reset-password'),
+          redirectTo: authRedirectUrl(),
+        })
+        if (error) throw error
+      } catch (error) {
+        throw new Error(t(errorKey(error)))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [t],
+  )
+
+  /**
+   * إعادة إرسال رابط تأكيد البريد.
+   * يُستخدم عندما يرفض الخادم الدخول بسبب «البريد غير مؤكد» — بدل الاكتفاء بعرض الخطأ.
+   */
+  const resendConfirmation = useCallback(
+    async (email: string) => {
+      setLoading(true)
+      try {
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email: email.trim(),
+          options: { emailRedirectTo: authRedirectUrl() },
         })
         if (error) throw error
       } catch (error) {
@@ -329,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       signOutEverywhere,
       sendPasswordReset,
+      resendConfirmation,
       updatePassword,
       updateProfilePatch,
       updatePublicPatch,
@@ -350,6 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       signOutEverywhere,
       sendPasswordReset,
+      resendConfirmation,
       updatePassword,
       updateProfilePatch,
       updatePublicPatch,

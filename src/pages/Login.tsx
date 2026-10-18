@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Mail, Lock } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
@@ -6,24 +6,37 @@ import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/Field'
 import { isValidEmail } from '@/lib/utils'
+import { authNoticeKey, takeAuthNotice } from '@/lib/authCallback'
 import { NotConfigured } from './NotConfigured'
 import { AuthShell } from './AuthShell'
 
 export function Login() {
   const { t } = useApp()
-  const { signIn, signInWithGoogle, configured, loading } = useAuth()
+  const { signIn, signInWithGoogle, resendConfirmation, configured, loading } = useAuth()
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [needsConfirm, setNeedsConfirm] = useState(false)
+  const [resendBusy, setResendBusy] = useState(false)
+  const [resent, setResent] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+
+  // سبب العودة من رابط المصادقة (رابط منتهي/غير صالح) — يُعرض مرة واحدة
+  useEffect(() => {
+    const code = takeAuthNotice()
+    if (code) setNotice(t(authNoticeKey(code)))
+  }, [t])
 
   if (!configured) return <NotConfigured />
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     setError(null)
+    setNeedsConfirm(false)
+    setResent(false)
     if (!email.trim()) return setError(t('email_required'))
     if (!isValidEmail(email)) return setError(t('invalid_email'))
     if (!password) return setError(t('password_required'))
@@ -31,7 +44,27 @@ export function Login() {
       await signIn({ email, password })
       navigate('/app/chats', { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('login_error'))
+      const message = err instanceof Error ? err.message : t('login_error')
+      setError(message)
+      // لا نُخفي الخطأ: نعرضه كما هو، ونضيف إجراءً حقيقياً لإعادة إرسال رابط التأكيد
+      if (message === t('email_not_confirmed')) setNeedsConfirm(true)
+    }
+  }
+
+  const resend = async () => {
+    if (!email.trim() || !isValidEmail(email)) {
+      setError(t('invalid_email'))
+      return
+    }
+    setResendBusy(true)
+    setError(null)
+    try {
+      await resendConfirmation(email)
+      setResent(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('generic_error'))
+    } finally {
+      setResendBusy(false)
     }
   }
 
@@ -84,10 +117,33 @@ export function Login() {
           </Link>
         </div>
 
+        {notice && (
+          <p className="mb-4 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+            {notice}
+          </p>
+        )}
+
         {error && (
           <p className="mb-4 rounded-xl bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-600 dark:bg-rose-950/40 dark:text-rose-300">
             {error}
           </p>
+        )}
+
+        {needsConfirm && (
+          <div className="mb-4 rounded-xl bg-ink-50 px-3 py-3 text-sm dark:bg-ink-800/60">
+            <p className="font-medium text-ink-700 dark:text-ink-200">{t('email_not_confirmed_hint')}</p>
+            <button
+              type="button"
+              onClick={() => void resend()}
+              disabled={resendBusy}
+              className="mt-2 font-semibold text-brand-600 hover:underline disabled:opacity-60 dark:text-brand-400"
+            >
+              {resendBusy ? t('sending') : t('resend_confirm_email')}
+            </button>
+            {resent && (
+              <p className="mt-2 font-semibold text-brand-700 dark:text-brand-300">{t('resend_confirm_sent')}</p>
+            )}
+          </div>
         )}
 
         <Button type="submit" full size="lg" loading={loading}>

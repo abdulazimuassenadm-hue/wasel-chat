@@ -5,18 +5,13 @@ import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App'
 import { initDeepLinks } from '@/lib/deepLinks'
+import { consumeAuthCallback } from '@/lib/authCallback'
 import { ToastProvider } from '@/context/ToastContext'
 import { AppProvider } from '@/context/AppContext'
 import { AuthProvider } from '@/context/AuthContext'
 import { LockProvider } from '@/context/LockContext'
 import { ChatProvider } from '@/context/ChatContext'
 import { CallProvider } from '@/context/CallContext'
-
-const container = document.getElementById('root')
-
-if (!container) {
-  throw new Error('Root element #root not found')
-}
 
 // تهيئة الروابط العميقة (لا تفعل شيئاً في المتصفح — تعمل داخل تطبيق Android فقط)
 void initDeepLinks()
@@ -41,7 +36,17 @@ if (
   }
 }
 
-createRoot(container).render(
+/**
+ * نُعالج عودة رابط المصادقة (تأكيد البريد / استعادة كلمة المرور / Google) قبل رسم
+ * الواجهة، لتكون الجلسة جاهزة ويُوجَّه المستخدم إلى المكان الصحيح مباشرة.
+ */
+async function bootstrap() {
+  const container = document.getElementById('root')
+  if (!container) throw new Error('Root element #root not found')
+
+  await consumeAuthCallback()
+
+  createRoot(container).render(
   <StrictMode>
     {/* ترتيب المزوّدات مهم: الثيم/اللغة ← الإشعارات ← المصادقة ← القفل ← المحادثات ← المكالمات */}
     <AppProvider>
@@ -60,4 +65,7 @@ createRoot(container).render(
       </ToastProvider>
     </AppProvider>
   </StrictMode>,
-)
+  )
+}
+
+void bootstrap()

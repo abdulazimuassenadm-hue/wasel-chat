@@ -186,6 +186,8 @@ export function errorKey(error: unknown): string {
   const message = (raw?.message || raw?.error_description || '').toLowerCase()
 
   if (!message) return 'generic_error'
+  if (message.includes('provider is not enabled') || message.includes('unsupported provider'))
+    return 'auth_provider_not_enabled'
   if (message.includes('invalid login credentials')) return 'login_error'
   if (message.includes('email not confirmed')) return 'email_not_confirmed'
   if (message.includes('user already registered') || message.includes('already been registered'))
