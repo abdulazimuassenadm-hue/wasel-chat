@@ -1,17 +1,27 @@
+import { useEffect, useRef } from 'react'
 import { Outlet, useMatch } from 'react-router-dom'
 import { useApp } from '@/context/AppContext'
+import { useToast } from '@/context/ToastContext'
+import { takeAccountNotice } from '@/lib/accounts'
 import { BottomNav, NavRail } from './NavRail'
 
 export function AppLayout() {
   const { isOnline } = useApp()
   const { t } = useApp()
-  // نخفي شريط التنقل السفلي على الجوال أثناء فتح محادثة
+  const toast = useToast()
+  const noticeShown = useRef(false)
   const inChat = useMatch('/app/chats/:conversationId')
+
+  useEffect(() => {
+    if (noticeShown.current) return
+    noticeShown.current = true
+    const notice = takeAccountNotice()
+    if (notice) toast.success(notice)
+  }, [toast])
 
   return (
     <div className="flex h-dvh-screen overflow-hidden bg-ink-50 dark:bg-ink-950">
       <NavRail />
-
       <div className="flex min-w-0 flex-1 flex-col">
         {!isOnline && (
           <div className="bg-amber-500 px-4 py-1.5 text-center text-xs font-semibold text-white">{t('offline_banner')}</div>

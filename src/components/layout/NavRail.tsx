@@ -21,6 +21,7 @@ import { useChat } from '@/context/ChatContext'
 import { useToast } from '@/context/ToastContext'
 import { Avatar } from '@/components/ui/Avatar'
 import { Dropdown } from '@/components/ui/Dropdown'
+import { AccountSwitcherButton } from '@/components/account/AccountSwitcher'
 import { cn, timeAgo } from '@/lib/utils'
 
 export function Logo({ compact = false }: { compact?: boolean }) {
@@ -176,6 +177,8 @@ export function NavRail() {
 
       <div className="flex-1" />
 
+      <AccountSwitcherButton />
+
       <NotificationsButton />
 
       <button
@@ -212,6 +215,12 @@ export function NavRail() {
             label: t('nav_settings'),
             icon: <Settings className="h-4 w-4" />,
             onClick: () => navigate('/app/settings'),
+          },
+          {
+            key: 'accounts',
+            label: t('accounts_section_title'),
+            icon: <UsersRound className="h-4 w-4" />,
+            onClick: () => navigate('/app/settings?tab=accounts'),
           },
           {
             key: 'security',

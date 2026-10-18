@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock } from 'lucide-react'
+import { ArrowRight, Mail, Lock } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
+import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/Field'
+import { accountLabel, takeAddingAccount, type SavedAccount } from '@/lib/accounts'
 import { isValidEmail } from '@/lib/utils'
 import { authNoticeKey, takeAuthNotice } from '@/lib/authCallback'
 import { NotConfigured } from './NotConfigured'
@@ -12,7 +14,15 @@ import { AuthShell } from './AuthShell'
 
 export function Login() {
   const { t } = useApp()
-  const { signIn, signInWithGoogle, resendConfirmation, configured, loading } = useAuth()
+  const {
+    signIn,
+    signInWithGoogle,
+    resendConfirmation,
+    configured,
+    loading,
+    accounts,
+    switchAccount,
+  } = useAuth()
   const navigate = useNavigate()
 
   const [email, setEmail] = useState('')
@@ -23,14 +33,30 @@ export function Login() {
   const [resendBusy, setResendBusy] = useState(false)
   const [resent, setResent] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [addingAccount, setAddingAccount] = useState(false)
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
 
   // سبب العودة من رابط المصادقة (رابط منتهي/غير صالح) — يُعرض مرة واحدة
   useEffect(() => {
     const code = takeAuthNotice()
     if (code) setNotice(t(authNoticeKey(code)))
+    // هل وصلنا من «إضافة حساب»؟ (الحساب السابق محفوظ في القائمة أدناه)
+    if (takeAddingAccount()) setAddingAccount(true)
   }, [t])
 
   if (!configured) return <NotConfigured />
+
+  const switchTo = async (account: SavedAccount) => {
+    setError(null)
+    setSwitchingId(account.id)
+    try {
+      await switchAccount(account.id)
+      // الصفحة ستُعاد تحميلها بالحساب المختار
+    } catch (err) {
+      setSwitchingId(null)
+      setError(err instanceof Error ? err.message : t('accounts_switch_failed'))
+    }
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -93,6 +119,59 @@ export function Login() {
       }
     >
       <form onSubmit={submit} noValidate>
+        {addingAccount && (
+          <p className="mb-4 rounded-xl bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-800 dark:bg-brand-950/50 dark:text-brand-200">
+            {t('accounts_adding_notice')}
+          </p>
+        )}
+
+        {accounts.length > 0 && (
+          <div className="mb-5 rounded-2xl border border-ink-200 bg-ink-50/60 p-3 dark:border-ink-700 dark:bg-ink-800/40">
+            <p className="mb-2 px-1 text-xs font-bold text-ink-500 dark:text-ink-400">
+              {addingAccount ? t('accounts_saved_on_device') : t('accounts_login_saved_title')}
+            </p>
+            <ul className="space-y-1.5">
+              {accounts.map((account) => {
+                const busy = switchingId === account.id
+                return (
+                  <li key={account.id}>
+                    <button
+                      type="button"
+                      disabled={Boolean(switchingId)}
+                      onClick={() => void switchTo(account)}
+                      className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-start transition hover:bg-brand-50 disabled:opacity-60 dark:bg-ink-900 dark:hover:bg-ink-800"
+                    >
+                      <Avatar
+                        src={account.avatarUrl}
+                        name={accountLabel(account)}
+                        id={account.id}
+                        size="sm"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-bold text-ink-900 dark:text-ink-50">
+                          {accountLabel(account)}
+                        </span>
+                        {account.email && account.email !== account.displayName && (
+                          <span className="block truncate text-xs text-ink-500 dark:text-ink-400">
+                            {account.email}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400">
+                        {busy ? t('accounts_switching') : t('login')}
+                        {!busy && <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="mt-2 px-1 text-[11px] leading-relaxed text-ink-500 dark:text-ink-400">
+              {t('accounts_login_saved_hint')}
+            </p>
+          </div>
+        )}
+
         <TextField
           label={t('email')}
           type="email"

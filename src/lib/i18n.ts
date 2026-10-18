@@ -593,6 +593,40 @@ const ar: Record<string, string> = {
   choose_contacts: 'اختر جهات الاتصال',
   search_contacts: 'ابحث في جهات الاتصال',
   selected_count: 'المحدد: {n}',
+
+  // تعدّد الحسابات / تبديل الحساب
+  accounts_title: 'تبديل الحساب',
+  accounts_section_title: 'الحسابات',
+  accounts_section_desc: 'أضف أكثر من حساب على هذا الجهاز وبدّل بينها بنقرة واحدة.',
+  accounts_saved_on_device: 'الحسابات المحفوظة على هذا الجهاز',
+  accounts_empty: 'لا يوجد حساب محفوظ بعد.',
+  accounts_add: 'إضافة حساب',
+  accounts_switch: 'تبديل',
+  accounts_switch_to: 'الدخول باسم {name}',
+  accounts_remove: 'إزالة من الجهاز',
+  accounts_current: 'الحساب الحالي',
+  accounts_switching: 'جارٍ التبديل…',
+  accounts_adding: 'جارٍ التحويل…',
+  accounts_last_used: 'آخر استخدام: {date}',
+  accounts_device_note:
+    'التبديل يُبقي جلستك السابقة صالحة في هذا الجهاز، بينما «تسجيل الخروج» يُنهي الجلسة ويحذف الحساب من الجهاز. لا نُخزّن كلمات المرور أبداً.',
+  accounts_max_note: 'يمكن حفظ حتى {n} حسابات على هذا الجهاز.',
+  accounts_add_hint: 'أضف حساباً آخر ثم بدّل بينهما من هذه القائمة دون إعادة كتابة كلمة المرور.',
+  accounts_login_saved_title: 'المتابعة بحساب محفوظ',
+  accounts_login_saved_hint: 'هذه الحسابات محفوظة على هذا الجهاز — اضغط للدخول مباشرة.',
+  accounts_adding_notice:
+    'أنت تُضيف حساباً جديداً. حسابك السابق محفوظ ويمكنك العودة إليه من القائمة هنا.',
+  accounts_switch_failed: 'تعذّر التبديل إلى هذا الحساب.',
+  account_not_saved: 'هذا الحساب غير محفوظ على هذا الجهاز.',
+  saved_account_expired: 'انتهت صلاحية هذا الحساب المحفوظ. سجّل الدخول من جديد.',
+  account_switch_success: 'تم التبديل إلى {name}.',
+  account_removed: 'تمت إزالة الحساب من هذا الجهاز.',
+  account_remove_title: 'إزالة الحساب من الجهاز؟',
+  account_remove_desc:
+    'سيُحذف الحساب من قائمة هذا الجهاز فقط، وبياناتك على الخادم لا تتأثر. يمكنك إضافته مجدداً بتسجيل الدخول.',
+  account_remove_self_desc:
+    'هذا حسابك الحالي: ستُنهى الجلسة وتعود إلى شاشة الدخول، وبياناتك على الخادم لا تتأثر.',
+  accounts_signout_current: 'تسجيل الخروج وإزالة من الجهاز',
 }
 
 const en: Record<string, string> = {
@@ -1165,6 +1199,41 @@ const en: Record<string, string> = {
   choose_contacts: 'Choose contacts',
   search_contacts: 'Search contacts',
   selected_count: 'Selected: {n}',
+
+  // Multi-account / account switching
+  accounts_title: 'Switch account',
+  accounts_section_title: 'Accounts',
+  accounts_section_desc: 'Add more than one account on this device and switch with one tap.',
+  accounts_saved_on_device: 'Accounts saved on this device',
+  accounts_empty: 'No saved account yet.',
+  accounts_add: 'Add account',
+  accounts_switch: 'Switch',
+  accounts_switch_to: 'Sign in as {name}',
+  accounts_remove: 'Remove from device',
+  accounts_current: 'Current account',
+  accounts_switching: 'Switching…',
+  accounts_adding: 'Redirecting…',
+  accounts_last_used: 'Last used: {date}',
+  accounts_device_note:
+    'Switching keeps your previous session valid on this device, while "Log out" ends the session and removes the account from the device. We never store passwords.',
+  accounts_max_note: 'You can save up to {n} accounts on this device.',
+  accounts_add_hint:
+    'Add another account, then switch between them from this list without retyping your password.',
+  accounts_login_saved_title: 'Continue with a saved account',
+  accounts_login_saved_hint: 'These accounts are saved on this device — tap to sign in directly.',
+  accounts_adding_notice:
+    'You are adding a new account. Your previous account is saved and you can return to it from this list.',
+  accounts_switch_failed: 'Could not switch to this account.',
+  account_not_saved: 'This account is not saved on this device.',
+  saved_account_expired: 'This saved account has expired. Please sign in again.',
+  account_switch_success: 'Switched to {name}.',
+  account_removed: 'Account removed from this device.',
+  account_remove_title: 'Remove this account from the device?',
+  account_remove_desc:
+    'The account is removed from this device list only; your server data is unaffected. You can add it again by signing in.',
+  account_remove_self_desc:
+    'This is your current account: the session will end and you will return to the sign-in screen. Your server data is unaffected.',
+  accounts_signout_current: 'Log out and remove from device',
 }
 
 export const dictionaries: Record<Lang, Record<string, string>> = { ar, en }

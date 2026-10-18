@@ -16,6 +16,7 @@ import {
   Trash2,
   User as UserIcon,
   UserCog,
+  UsersRound,
 } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
@@ -27,15 +28,17 @@ import { SelectField, Switch, TextArea, TextField } from '@/components/ui/Field'
 import { EmptyState, FullPageLoader, SectionCard, Spinner } from '@/components/ui/Misc'
 import { PageHeader } from '@/components/layout/AppLayout'
 import { SecuritySection } from '@/components/settings/SecuritySection'
+import { AccountsSection } from '@/components/account/AccountSwitcher'
 import * as api from '@/lib/api'
 import { isAllowedFile, UPLOAD_LIMITS, VAPID_PUBLIC_KEY } from '@/lib/supabase'
 import { cn, errorKey, isValidUsername } from '@/lib/utils'
 import type { PrivacySettings, PublicProfile, ThemeMode, Visibility } from '@/types'
 
-type TabKey = 'profile' | 'appearance' | 'privacy' | 'security' | 'notifications' | 'blocked' | 'sessions' | 'danger'
+type TabKey = 'profile' | 'accounts' | 'appearance' | 'privacy' | 'security' | 'notifications' | 'blocked' | 'sessions' | 'danger'
 
 const TABS: Array<{ key: TabKey; icon: typeof UserIcon; labelKey: string }> = [
   { key: 'profile', icon: UserIcon, labelKey: 'profile_title' },
+  { key: 'accounts', icon: UsersRound, labelKey: 'accounts_section_title' },
   { key: 'appearance', icon: Palette, labelKey: 'appearance' },
   { key: 'privacy', icon: ShieldCheck, labelKey: 'privacy_settings' },
   { key: 'security', icon: Lock, labelKey: 'privacy_security' },
@@ -89,6 +92,7 @@ export function SettingsPage() {
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8">
           <div className="mx-auto max-w-2xl space-y-5">
             {active === 'profile' && <ProfileSection />}
+            {active === 'accounts' && <AccountsSection />}
             {active === 'appearance' && <AppearanceSection />}
             {active === 'privacy' && <PrivacySection />}
             {active === 'security' && <SecuritySection />}
