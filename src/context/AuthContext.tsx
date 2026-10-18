@@ -9,7 +9,12 @@ import {
   type ReactNode,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
-import { isSupabaseConfigured, supabase } from '@/lib/supabase'
+import {
+  SUPABASE_ANON_KEY,
+  SUPABASE_URL,
+  isSupabaseConfigured,
+  supabase,
+} from '@/lib/supabase'
 import { authRedirectUrl } from '@/lib/authRedirect'
 import { isNative } from '@/lib/platform'
 import {
@@ -24,6 +29,40 @@ import {
 import { errorKey } from '@/lib/utils'
 import { useApp } from './AppContext'
 import type { Profile, PublicProfile } from '@/types'
+
+/**
+ * فحص توفّر مزوّد تسجيل دخول خارجي (Google) قبل إعادة توجيه المستخدم.
+ *
+ * السبب: عند تعطيل المزوّد من إعدادات Supabase، لا يُعيد `signInWithOAuth`
+ * خطأً في المتصفح، بل **ينقل المتصفح** إلى واجهة Supabase التي ترد بجسم JSON
+ * خام مثل:
+ *   {"code":400,"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}
+ * فيبقى المستخدم أمام نص غير مفهوم. الفحص التالي يقرأ الحالة الفعلية من الخادم
+ * (`/auth/v1/settings` وهي واجهة عامة آمنة) ويُظهر سبباً واضحاً بدل ذلك.
+ *
+ * القيمة المُعادة: `true` مُفعّل، `false` غير مُفعّل، `null` تعذّر الفحص
+ * (في هذه الحالة نسمح بالمحاولة ولا نُعطّل شيئاً).
+ */
+let externalProvidersCache: Record<string, boolean> | null = null
+
+async function isExternalProviderEnabled(provider: string): Promise<boolean | null> {
+  if (!isSupabaseConfigured) return null
+  try {
+    if (!externalProvidersCache) {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+        headers: { apikey: SUPABASE_ANON_KEY },
+      })
+      if (!response.ok) return null
+      const json = (await response.json()) as { external?: Record<string, boolean> }
+      externalProvidersCache = json.external ?? {}
+    }
+    const value = externalProvidersCache[provider]
+    // `undefined` تعني مزوّداً غير معروف في الاستجابة — لا نمنع المحاولة
+    return typeof value === 'boolean' ? value : null
+  } catch {
+    return null
+  }
+}
 
 interface AuthContextValue {
   session: Session | null
@@ -207,6 +246,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     setLoading(true)
     try {
+      // لا نُرسل المستخدم إلى صفحة JSON خام إن كان المزوّد مُعطّلاً على الخادم
+      const enabled = await isExternalProviderEnabled('google')
+      if (enabled === false) throw new Error(t('auth_provider_not_enabled'))
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -223,7 +266,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await Browser.open({ url: data.url })
       }
     } catch (error) {
-      throw new Error(t(errorKey(error)))
+      // نُبقي الرسالة الواضحة كما هي بدل استبدالها برسالة عامة
+      const message =
+        error instanceof Error && error.message === t('auth_provider_not_enabled')
+          ? error.message
+          : t(errorKey(error))
+      throw new Error(message)
     } finally {
       setLoading(false)
     }
