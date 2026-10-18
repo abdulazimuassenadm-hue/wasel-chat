@@ -10,6 +10,16 @@
 - `GET /auth/v1/authorize?provider=google` → `400 {"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}`.
 
 ### أ) في Google Cloud Console (مشروع جديد أو موجود)
+
+الروابط المباشرة:
+| الهدف | الرابط |
+|---|---|
+| شاشة الموافقة | https://console.cloud.google.com/apis/credentials/consent |
+| إنشاء OAuth client ID | https://console.cloud.google.com/apis/credentials/oauthclient |
+| صفحة بيانات الاعتماد | https://console.cloud.google.com/apis/credentials |
+| إنشاء مشروع جديد | https://console.cloud.google.com/projectcreate |
+| تبديل المشروع | https://console.cloud.google.com/projectselector2/home/dashboard |
+
 1. APIs & Services → OAuth consent screen: أنشئ الشاشة (External) واملأ اسم التطبيق والبريد.
 2. APIs & Services → Credentials → Create credentials → **OAuth client ID** → نوع **Web application**.
 3. **Authorized redirect URIs** — أضف بالضبط:
