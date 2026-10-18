@@ -627,6 +627,20 @@ const ar: Record<string, string> = {
   account_remove_self_desc:
     'هذا حسابك الحالي: ستُنهى الجلسة وتعود إلى شاشة الدخول، وبياناتك على الخادم لا تتأثر.',
   accounts_signout_current: 'تسجيل الخروج وإزالة من الجهاز',
+
+  // إخفاء الاسم / اسم المستخدم
+  name_privacy_title: 'إخفاء الاسم',
+  name_privacy_desc: 'أخفِ اسمك واسم المستخدم عن الآخرين، وأظهرهما متى شئت.',
+  hide_name_toggle: 'إخفاء اسمي واسم المستخدم عن الآخرين',
+  hide_name_hint: 'سيظهر اسمك للآخرين كـ «{alias}» ويُزال اسم المستخدم (@) من ملفك.',
+  hide_name_on: 'تم إخفاء اسمك واسم المستخدم.',
+  hide_name_off: 'تم إظهار اسمك من جديد.',
+  hide_name_alias: 'مستخدم واصل',
+  hide_name_note:
+    'الإخفاء يُطبّق على مستوى الحساب: يرى الآخرون الاسم البديل «{alias}» ولا يظهر اسم المستخدم (@). يُحفظ اسمك الأصلي على هذا الجهاز فقط لتعود إليه بنقرة واحدة.',
+  hide_name_restore_missing: 'لم نجد اسمك الأصلي على هذا الجهاز — اكتبه من تبويب «الملف الشخصي».',
+  hide_name_active_note: 'اسمك مُخفى حالياً على جميع الأجهزة.',
+  hide_name_failed: 'تعذّر تحديث إعدادات الاسم.',
 }
 
 const en: Record<string, string> = {
@@ -1234,6 +1248,20 @@ const en: Record<string, string> = {
   account_remove_self_desc:
     'This is your current account: the session will end and you will return to the sign-in screen. Your server data is unaffected.',
   accounts_signout_current: 'Log out and remove from device',
+
+  // Hide name / username
+  name_privacy_title: 'Hide name',
+  name_privacy_desc: 'Hide your name and username from others, and show them again anytime.',
+  hide_name_toggle: 'Hide my name and username from others',
+  hide_name_hint: 'Others will see your name as "{alias}" and your username (@) is removed from your profile.',
+  hide_name_on: 'Your name and username were hidden.',
+  hide_name_off: 'Your name is visible again.',
+  hide_name_alias: 'Wasel user',
+  hide_name_note:
+    'Hiding applies to the whole account: others see the alias "{alias}" and your username (@) is not shown. Your original name is stored on this device only so you can restore it with one tap.',
+  hide_name_restore_missing: 'We could not find your original name on this device — type it in the "Profile" tab.',
+  hide_name_active_note: 'Your name is currently hidden on all devices.',
+  hide_name_failed: 'Could not update your name settings.',
 }
 
 export const dictionaries: Record<Lang, Record<string, string>> = { ar, en }

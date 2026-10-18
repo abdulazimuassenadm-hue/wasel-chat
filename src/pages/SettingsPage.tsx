@@ -29,6 +29,12 @@ import { EmptyState, FullPageLoader, SectionCard, Spinner } from '@/components/u
 import { PageHeader } from '@/components/layout/AppLayout'
 import { SecuritySection } from '@/components/settings/SecuritySection'
 import { AccountsSection } from '@/components/account/AccountSwitcher'
+import {
+  clearHiddenIdentity,
+  getHiddenIdentity,
+  isNameHidden,
+  setHiddenIdentity,
+} from '@/lib/namePrivacy'
 import * as api from '@/lib/api'
 import { isAllowedFile, UPLOAD_LIMITS, VAPID_PUBLIC_KEY } from '@/lib/supabase'
 import { cn, errorKey, isValidUsername } from '@/lib/utils'
@@ -94,7 +100,12 @@ export function SettingsPage() {
             {active === 'profile' && <ProfileSection />}
             {active === 'accounts' && <AccountsSection />}
             {active === 'appearance' && <AppearanceSection />}
-            {active === 'privacy' && <PrivacySection />}
+            {active === 'privacy' && (
+              <>
+                <PrivacySection />
+                <NamePrivacySection />
+              </>
+            )}
             {active === 'security' && <SecuritySection />}
             {active === 'notifications' && <NotificationsSection />}
             {active === 'blocked' && <BlockedSection />}
@@ -424,6 +435,85 @@ function PrivacySection() {
           <p className="mt-2 text-xs leading-relaxed text-ink-400 dark:text-ink-500">{t('read_receipts_note')}</p>
         </div>
       </div>
+    </SectionCard>
+  )
+}
+
+// ============================================================================
+// إخفاء الاسم / اسم المستخدم
+// ============================================================================
+
+function NamePrivacySection() {
+  const { t } = useApp()
+  const { user, publicProfile, updatePublicPatch } = useAuth()
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+
+  const hidden = isNameHidden(user?.id)
+  const alias = t('hide_name_alias')
+
+  const toggle = async (value: boolean) => {
+    if (!user) return
+    if (!value) {
+      // إظهار الاسم من جديد من النسخة المحفوظة محلياً
+      const saved = getHiddenIdentity(user.id)
+      if (!saved?.displayName) {
+        toast.error(t('hide_name_restore_missing'))
+        return
+      }
+      setSaving(true)
+      try {
+        await updatePublicPatch({
+          display_name: saved.displayName,
+          username: saved.username ?? null,
+        })
+        clearHiddenIdentity(user.id)
+        toast.success(t('hide_name_off'))
+      } catch (error) {
+        toast.error(t(errorKey(error)) || t('hide_name_failed'))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    if (!publicProfile) return
+    setSaving(true)
+    try {
+      // نحفظ الاسم الحالي محلياً قبل تغييره
+      setHiddenIdentity(user.id, {
+        displayName: publicProfile.display_name,
+        username: publicProfile.username,
+      })
+      await updatePublicPatch({ display_name: alias, username: null })
+      toast.success(t('hide_name_on'))
+    } catch (error) {
+      clearHiddenIdentity(user.id)
+      toast.error(t(errorKey(error)) || t('hide_name_failed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <SectionCard title={t('name_privacy_title')} description={t('name_privacy_desc')}>
+      <div className={cn(saving && 'opacity-70')}>
+        <Switch
+          label={t('hide_name_toggle')}
+          hint={t('hide_name_hint', { alias })}
+          checked={hidden}
+          onChange={(value) => void toggle(value)}
+        />
+      </div>
+      <p className="mt-3 border-t border-ink-100 pt-3 text-xs leading-relaxed text-ink-500 dark:border-ink-800 dark:text-ink-400">
+        {t('hide_name_note', { alias })}
+      </p>
+      {hidden && (
+        <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-brand-700 dark:text-brand-300">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {t('hide_name_active_note')}
+        </p>
+      )}
     </SectionCard>
   )
 }

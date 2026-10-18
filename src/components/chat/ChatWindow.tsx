@@ -246,18 +246,18 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 
         {!isGroup && (
           <>
-            <IconButton label={t('call')} onClick={() => startCall('audio')}>
+            <IconButton label={t('call')} className="max-sm:h-9 max-sm:w-9" onClick={() => startCall('audio')}>
               <Phone className="h-5 w-5" />
             </IconButton>
-            <IconButton label={t('video_call')} onClick={() => startCall('video')}>
+            <IconButton label={t('video_call')} className="max-sm:h-9 max-sm:w-9" onClick={() => startCall('video')}>
               <Video className="h-5 w-5" />
             </IconButton>
           </>
         )}
-        <IconButton label={t('search')} onClick={() => setSearchOpen((value) => !value)}>
+        <IconButton label={t('search')} className="max-sm:h-9 max-sm:w-9" onClick={() => setSearchOpen((value) => !value)}>
           <Search className="h-5 w-5" />
         </IconButton>
-        <IconButton label={t('contact_info')} onClick={() => setInfoOpen(true)}>
+        <IconButton label={t('contact_info')} className="max-sm:h-9 max-sm:w-9" onClick={() => setInfoOpen(true)}>
           <Info className="h-5 w-5" />
         </IconButton>
       </header>

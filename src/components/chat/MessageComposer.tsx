@@ -222,7 +222,7 @@ export function MessageComposer({
   }
 
   return (
-    <div className="relative border-t border-ink-200/80 bg-white px-2 py-2 safe-bottom dark:border-ink-800 dark:bg-ink-900 sm:px-4">
+    <div className="relative border-t border-ink-200/80 bg-white px-1.5 py-1.5 safe-bottom dark:border-ink-800 dark:bg-ink-900 sm:px-4 sm:py-2">
       {/* شريط الرد */}
       {replyTo && !editing && (
         <div className="mx-1 mb-2 flex items-center gap-2 rounded-xl border-s-4 border-brand-500 bg-ink-50 px-3 py-2 dark:bg-ink-800/70">
@@ -283,10 +283,10 @@ export function MessageComposer({
       )}
 
       {recording ? (
-        <div className="flex items-center gap-3 rounded-2xl bg-rose-50 px-4 py-3 dark:bg-rose-950/40">
-          <span className="flex h-3 w-3 animate-pulse rounded-full bg-rose-500" />
-          <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">{formatDuration(recordSeconds)}</span>
-          <span className="flex-1 text-xs text-rose-600 dark:text-rose-300">{t('recording_audio')}</span>
+        <div className="flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 dark:bg-rose-950/40">
+          <span className="flex h-3 w-3 shrink-0 animate-pulse rounded-full bg-rose-500" />
+          <span className="shrink-0 text-sm font-semibold text-rose-700 dark:text-rose-300">{formatDuration(recordSeconds)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-rose-600 dark:text-rose-300">{t('recording_audio')}</span>
           <IconButton label={t('cancel_recording')} onClick={() => stopRecording(true)}>
             <Trash2 className="h-4 w-4 text-rose-600" />
           </IconButton>
@@ -295,7 +295,7 @@ export function MessageComposer({
           </IconButton>
         </div>
       ) : (
-        <div className="flex items-end gap-1.5">
+        <div className="flex items-end gap-1 sm:gap-1.5">
           {/* الرموز التعبيرية */}
           <div className="relative">
             <EmojiPicker
@@ -309,14 +309,14 @@ export function MessageComposer({
                 })
               }}
             />
-            <IconButton label={t('emoji')} onClick={() => setShowEmoji((value) => !value)}>
+            <IconButton label={t('emoji')} className="max-sm:h-9 max-sm:w-9" onClick={() => setShowEmoji((value) => !value)}>
               <Smile className="h-5 w-5" />
             </IconButton>
           </div>
 
           {/* المرفقات */}
           <div className="relative">
-            <IconButton label={t('attach_file')} onClick={() => setShowAttach((value) => !value)}>
+            <IconButton label={t('attach_file')} className="max-sm:h-9 max-sm:w-9" onClick={() => setShowAttach((value) => !value)}>
               <Paperclip className={cn('h-5 w-5 transition', showAttach && 'rotate-45')} />
             </IconButton>
             {showAttach && (
@@ -363,7 +363,7 @@ export function MessageComposer({
             onKeyDown={onKeyDown}
             rows={1}
             placeholder={t('write_message')}
-            className="max-h-[140px] min-h-[44px] flex-1 resize-none rounded-2xl border border-ink-200 bg-ink-50 px-4 py-3 text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10 dark:border-ink-700 dark:bg-ink-800 dark:text-ink-50 dark:focus:bg-ink-800"
+            className="max-h-[120px] min-h-[40px] min-w-0 flex-1 resize-none rounded-2xl border border-ink-200 bg-ink-50 px-3 py-2.5 text-sm text-ink-900 outline-none transition placeholder:text-ink-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/10 dark:border-ink-700 dark:bg-ink-800 dark:text-ink-50 dark:focus:bg-ink-800 sm:max-h-[140px] sm:min-h-[44px] sm:px-4 sm:py-3"
           />
 
           {/* إرسال أو تسجيل */}
@@ -371,7 +371,7 @@ export function MessageComposer({
             <button
               type="button"
               onClick={submit}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-95"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white transition hover:bg-brand-700 active:scale-95 sm:h-11 sm:w-11"
               aria-label={t('send')}
             >
               <Send className="h-5 w-5 rtl:-scale-x-100" />
@@ -380,7 +380,7 @@ export function MessageComposer({
             <button
               type="button"
               onClick={startRecording}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink-100 text-ink-600 transition hover:bg-ink-200 active:scale-95 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink-100 text-ink-600 transition hover:bg-ink-200 active:scale-95 sm:h-11 sm:w-11 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700"
               aria-label={t('record_voice')}
             >
               <Mic className="h-5 w-5" />
