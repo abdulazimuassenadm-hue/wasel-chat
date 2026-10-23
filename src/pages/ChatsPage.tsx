@@ -18,7 +18,7 @@ export function ChatsPage() {
         <ConversationList />
       </div>
 
-      <div className={cn('min-h-0 flex-1', !conversationId && 'hidden sm:flex')}>
+      <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', !conversationId && 'hidden sm:flex')}>
         {conversationId ? (
           <ChatLockGate conversationId={conversationId}>
             <ChatWindow conversationId={conversationId} />

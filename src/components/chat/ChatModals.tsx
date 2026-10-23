@@ -206,7 +206,7 @@ export function ChatSearchPanel({
   if (!open) return null
 
   return (
-    <div className="border-b border-ink-200/80 bg-white px-3 py-2 dark:border-ink-800 dark:bg-ink-900">
+    <div className="shrink-0 border-b border-ink-200/80 bg-white px-3 py-2 dark:border-ink-800 dark:bg-ink-900">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-ink-400" />

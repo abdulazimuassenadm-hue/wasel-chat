@@ -237,14 +237,14 @@ export function MessageComposer({
 
   if (!canSend) {
     return (
-      <div className="border-t border-ink-200/80 bg-white px-4 py-4 text-center text-sm text-ink-500 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-400">
+      <div className="shrink-0 border-t border-ink-200/80 bg-white px-4 pt-4 text-center text-sm text-ink-500 safe-bottom-composer dark:border-ink-800 dark:bg-ink-900 dark:text-ink-400">
         {blockedReason ?? t('permission_denied')}
       </div>
     )
   }
 
   return (
-    <div className="relative shrink-0 border-t border-ink-200/80 bg-white px-1.5 py-1.5 safe-bottom dark:border-ink-800 dark:bg-ink-900 sm:px-4 sm:py-2">
+    <div className="relative shrink-0 border-t border-ink-200/80 bg-white px-1.5 pt-1.5 safe-bottom-composer dark:border-ink-800 dark:bg-ink-900 sm:px-4 sm:pt-2">
       {/* شريط الرد */}
       {replyTo && !editing && (
         <div className="mx-1 mb-2 flex items-center gap-2 rounded-xl border-s-4 border-brand-500 bg-ink-50 px-3 py-2 dark:bg-ink-800/70">

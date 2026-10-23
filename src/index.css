@@ -111,6 +111,10 @@
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+  /* الشريط السفلي في المحادثة: هامش مريح + مساحة شريط النظام في الأجهزة ذات الحواف */
+  .safe-bottom-composer {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  }
   .h-dvh-screen {
     height: 100vh;
     height: var(--app-height, 100dvh);

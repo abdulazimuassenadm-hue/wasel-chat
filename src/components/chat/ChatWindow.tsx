@@ -245,7 +245,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
   let lastDay = ''
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-ink-50 dark:bg-ink-950">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-ink-50 dark:bg-ink-950">
       <header className="flex h-16 shrink-0 items-center gap-1.5 border-b border-ink-200/80 bg-white px-2 dark:border-ink-800 dark:bg-ink-900 sm:gap-2 sm:px-3">
         <button
           type="button"
