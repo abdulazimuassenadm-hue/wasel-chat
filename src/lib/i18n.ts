@@ -267,7 +267,7 @@ const ar: Record<string, string> = {
 
   // المستخدمون والجهات
   contacts_title: 'جهات الاتصال',
-  search_users: 'ابحث بالاسم أو اسم المستخدم أو البريد أو رقم الهاتف',
+  search_users: 'ابحث بالاسم أو اسم المستخدم أو البريد أو رقم الهاتف الكامل',
   no_contacts: 'لا توجد جهات اتصال بعد',
   no_contacts_hint: 'ابحث عن مستخدمين على المنصة وأضفهم إلى جهات اتصالك.',
   add_contact: 'إضافة لجهات الاتصال',
@@ -703,13 +703,13 @@ const ar: Record<string, string> = {
 
   // البحث برقم الهاتف
   phone_label: 'رقم الهاتف (اختياري)',
-  phone_hint: 'يُستخدم للعثور عليك برقم الهاتف. لا يظهر رقمك للآخرين، ولا يُعرض إلا لمن يكتب الرقم مطابقاً.',
-  phone_invalid: 'أدخل رقم هاتف صحيحاً (7 أرقام على الأقل).',
+  phone_hint: 'يُستخدم للعثور عليك برقم الهاتف الكامل. لا يظهر رقمك للآخرين، ولا يُعرض إلا لمن يكتب الرقم مطابقاً.',
+  phone_invalid: 'أدخل رقم هاتف صحيحاً (9 أرقام على الأقل).',
   phone_search_unavailable:
     'البحث برقم الهاتف غير مفعّل على الخادم بعد. اطلب من المشرف تطبيق دالة search_user_by_phone من ملف التحديث.',
   search_users_cta: 'البحث عن «{term}» وبدء محادثة',
-  search_users_hint: 'ابحث بالاسم أو اسم المستخدم أو رقم الهاتف',
-  search_no_results_hint: 'تأكد من الاسم أو رقم الهاتف (7 أرقام على الأقل)، أو جرّب البحث باسم المستخدم.',
+  search_users_hint: 'ابحث بالاسم أو اسم المستخدم أو رقم الهاتف الكامل',
+  search_no_results_hint: 'تأكد من الاسم أو رقم الهاتف الكامل (9 أرقام على الأقل)، أو جرّب البحث باسم المستخدم.',
 }
 
 const en: Record<string, string> = {
@@ -967,7 +967,7 @@ const en: Record<string, string> = {
   online_count: '{n} online',
 
   contacts_title: 'Contacts',
-  search_users: 'Search by name, username, email, or phone number',
+  search_users: 'Search by name, username, email, or full phone number',
   no_contacts: 'No contacts yet',
   no_contacts_hint: 'Find users on the platform and add them to your contacts.',
   add_contact: 'Add to contacts',
@@ -1394,13 +1394,13 @@ const en: Record<string, string> = {
 
   // Phone search
   phone_label: 'Phone number (optional)',
-  phone_hint: 'Used to find you by phone. Your number is not shown to others and appears only to an exact search.',
-  phone_invalid: 'Enter a valid phone number (at least 7 digits).',
+  phone_hint: 'Used to find you by full phone number. Your number is not shown to others and appears only to an exact search.',
+  phone_invalid: 'Enter a valid phone number (at least 9 digits).',
   phone_search_unavailable:
     'Phone search is not enabled on the server yet. Ask the admin to apply the search_user_by_phone function from the upgrade file.',
   search_users_cta: 'Find "{term}" and start a chat',
-  search_users_hint: 'Search by name, username, or phone number',
-  search_no_results_hint: 'Check the name or phone number (at least 7 digits), or try the username.',
+  search_users_hint: 'Search by name, username, or full phone number',
+  search_no_results_hint: 'Check the name or full phone number (at least 9 digits), or try the username.',
 }
 
 export const dictionaries: Record<Lang, Record<string, string>> = { ar, en }

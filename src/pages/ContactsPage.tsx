@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessageSquare, Phone, Search, UserPlus, Video, Users, X } from 'lucide-react'
+import { MessageSquare, Search, UserPlus, Video, Users, X, Phone } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { useChat } from '@/context/ChatContext'
@@ -42,29 +42,49 @@ export function ContactsPage() {
     void loadContacts()
   }, [loadContacts])
 
-  // البحث عن مستخدمين
+  // البحث عن مستخدمين بالاسم أو اسم المستخدم أو البريد
   useEffect(() => {
     if (!user) return
     const clean = term.trim()
     if (clean.length < 2) {
       setResults([])
+      setSearching(false)
       return
     }
+
+    let cancelled = false
     setSearching(true)
+
     const timeout = window.setTimeout(() => {
-      void api
-        .searchUsers(clean, user.id)
-        .then(async (found) => {
-          if (isValidEmail(clean)) {
-            const byEmail = await api.findByEmail(clean)
-            if (byEmail && !found.some((p) => p.id === byEmail.id)) found.unshift(byEmail)
+      const run = async () => {
+        try {
+          const [byName, byEmail] = await Promise.all([
+            api.searchUsers(clean, user.id).catch(() => [] as PublicProfile[]),
+            api.findByEmail(clean).catch(() => null),
+          ])
+
+          if (cancelled) return
+
+          const merged: PublicProfile[] = []
+          const seen = new Set<string>()
+          for (const profile of [...byName, byEmail]) {
+            if (!profile?.id || seen.has(profile.id)) continue
+            seen.add(profile.id)
+            merged.push(profile)
           }
-          setResults(found)
-        })
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false))
+
+          if (!cancelled) setResults(merged)
+        } finally {
+          if (!cancelled) setSearching(false)
+        }
+      }
+      void run()
     }, 350)
-    return () => window.clearTimeout(timeout)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
   }, [term, user])
 
   const contactIds = new Set(contacts.map((c) => c.contact_user_id))
@@ -111,8 +131,9 @@ export function ContactsPage() {
     }
   }
 
-  const renderRow = (profile: PublicProfile, isContact: boolean, contact?: Contact) => {
+  const renderRow = (profile: PublicProfile, contactIdsHas: boolean, contact?: Contact) => {
     const online = onlineUsers[profile.id] || profile.presence === 'online'
+    const isContact = contactIdsHas
     return (
       <div key={profile.id} className="flex items-center gap-3 px-4 py-3">
         <Avatar src={profile.avatar_url} name={profile.display_name} id={profile.id} size="md" showPresence online={online} />
@@ -168,6 +189,10 @@ export function ContactsPage() {
             onChange={(event) => setTerm(event.target.value)}
             placeholder={t('search_users')}
             className="wasel-input ps-10"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            aria-label={t('search_users')}
           />
         </div>
       </div>

@@ -53,12 +53,15 @@ export function normalizePhone(
   return `${countryCode}${digits}`
 }
 
-/** هل النص يبدو كرقم هاتف (يكفي للبحث)؟ */
+/**
+ * هل النص رقم هاتف كامل قابل للبحث؟
+ * نطلب 9 أرقام على الأقل حتى لا نرسل بحثاً جزئياً يستهلك طلبات بلا نتيجة.
+ */
 export function isPhoneLike(value: string): boolean {
   const clean = value.trim()
   if (!clean) return false
   const digits = digitsOnly(clean)
-  if (digits.length < 7) return false
+  if (digits.length < 9) return false
   // نسمح فقط بالأرقام ورموز الهاتف الشائعة حتى لا نحاول البحث بالرقم في نص عادي
   return /^[+\d\s\-().٠-٩۰-۹]+$/.test(clean)
 }
