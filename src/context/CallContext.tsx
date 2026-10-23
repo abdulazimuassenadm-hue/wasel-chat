@@ -88,7 +88,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const supported =
     typeof window !== 'undefined' &&
     typeof RTCPeerConnection !== 'undefined' &&
-    Boolean(navigator.mediaDevices?.getUserMedia)
+    Boolean(navigator.mediaDevices?.getUserMedia) &&
+    turnConfigured
 
   useEffect(() => {
     callRef.current = call
@@ -421,6 +422,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
       if (!supported) {
         toast.error(t('call_not_supported'))
         return
+      }
+      if (!turnConfigured) {
+        toast.warning(t('turn_not_configured'))
+        // TURN غير مُكوّن، لكن المكالمة ستبدأ عبر STUN فقط وقد تفشل على شبكات الشركات.
+        // يمكن للمستخدمين تجربة المكالمة، وإذا فشلت فلجوء لاستخدام شبكة أخرى أو الاتصال بالدعم.
       }
       if (callRef.current) {
         toast.warning(t('in_call'))
