@@ -29,6 +29,7 @@ import { EmptyState, FullPageLoader, SectionCard, Spinner } from '@/components/u
 import { PageHeader } from '@/components/layout/AppLayout'
 import { SecuritySection } from '@/components/settings/SecuritySection'
 import { AccountsSection } from '@/components/account/AccountSwitcher'
+import { formatPhone, isPhoneLike, normalizePhone } from '@/lib/phone'
 import {
   getHiddenIdentity,
   isNameHidden,
@@ -40,6 +41,7 @@ import {
 } from '@/lib/namePrivacy'
 import * as api from '@/lib/api'
 import { isAllowedFile, UPLOAD_LIMITS, VAPID_PUBLIC_KEY } from '@/lib/supabase'
+import { disablePush, enablePush, getPushSubscription, pushSupported } from '@/lib/push'
 import { cn, errorKey, isValidUsername } from '@/lib/utils'
 import type { PrivacySettings, PublicProfile, ThemeMode, Visibility } from '@/types'
 
@@ -131,13 +133,14 @@ export function SettingsPage() {
 
 function ProfileSection() {
   const { t } = useApp()
-  const { user, publicProfile, updatePublicPatch, saveAvatar, clearAvatar } = useAuth()
+  const { user, profile, publicProfile, updateProfilePatch, updatePublicPatch, saveAvatar, clearAvatar } = useAuth()
   const toast = useToast()
 
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [about, setAbout] = useState('')
   const [statusText, setStatusText] = useState('')
+  const [phone, setPhone] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
@@ -149,6 +152,10 @@ function ProfileSection() {
     setAbout(publicProfile.about ?? '')
     setStatusText(publicProfile.status_text ?? '')
   }, [publicProfile])
+
+  useEffect(() => {
+    setPhone(profile?.phone ? formatPhone(profile.phone, 'en') : '')
+  }, [profile?.phone])
 
   const onAvatar = async (file: File | null) => {
     if (!file) return
@@ -184,6 +191,11 @@ function ProfileSection() {
       toast.error(t('username_invalid'))
       return
     }
+    const cleanPhone = phone.trim()
+    if (cleanPhone && !isPhoneLike(cleanPhone)) {
+      toast.error(t('phone_invalid'))
+      return
+    }
     setBusy(true)
     try {
       const patch: Partial<PublicProfile> = {
@@ -193,6 +205,7 @@ function ProfileSection() {
         status_text: statusText.trim() || null,
       }
       await updatePublicPatch(patch)
+      await updateProfilePatch({ phone: cleanPhone ? normalizePhone(cleanPhone) : null })
       toast.success(t('profile_updated'))
     } catch (error) {
       toast.error(t(errorKey(error)))
@@ -254,6 +267,18 @@ function ProfileSection() {
             onChange={(event) => setUsername(event.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
             hint={t('setup_username_hint')}
             maxLength={24}
+          />
+          <TextField
+            label={t('phone_label')}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            placeholder="+249 9X XXX XXXX"
+            hint={t('phone_hint')}
+            type="tel"
+            inputMode="tel"
+            dir="ltr"
+            autoComplete="tel"
+            maxLength={22}
           />
           <TextArea
             label={t('about')}
@@ -543,6 +568,29 @@ function NotificationsSection() {
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   )
   const [saving, setSaving] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [pushStatus, setPushStatus] = useState<
+    'checking' | 'active' | 'inactive' | 'unsupported' | 'not_configured'
+  >('checking')
+
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      if (!pushSupported()) {
+        if (alive) setPushStatus('unsupported')
+        return
+      }
+      if (!VAPID_PUBLIC_KEY) {
+        if (alive) setPushStatus('not_configured')
+        return
+      }
+      const subscription = await getPushSubscription()
+      if (alive) setPushStatus(subscription ? 'active' : 'inactive')
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
 
   if (!profile) return null
   const settings = profile.notification_settings
@@ -558,23 +606,53 @@ function NotificationsSection() {
     }
   }
 
-  const requestPermission = async () => {
-    if (typeof Notification === 'undefined') {
-      toast.error(t('push_not_supported'))
-      return
+  /** يطلب صلاحية الإشعارات ويسجّل اشتراك Web Push لهذا الجهاز. */
+  const ensurePushSubscription = async (): Promise<boolean> => {
+    if (pushStatus === 'unsupported') {
+      toast.info(t('push_not_supported'))
+      return false
     }
-    try {
-      const result = await Notification.requestPermission()
-      setPermission(result)
-      if (result === 'granted') {
-        await patch({ browser: true })
-        toast.success(t('enable_browser_notifications'))
-      } else {
-        toast.error(t('browser_notifications_denied'))
-      }
-    } catch {
+    if (pushStatus === 'not_configured') {
+      toast.info(t('push_requires_setup'))
+      return false
+    }
+    setWorking(true)
+    const result = await enablePush(profile.id)
+    setWorking(false)
+    setPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
+    if (result === 'ok') {
+      setPushStatus('active')
+      toast.success(t('push_enabled_success'))
+      return true
+    }
+    if (result === 'denied') {
+      toast.error(t('push_permission_denied_device'))
+    } else if (result === 'not_configured') {
+      toast.info(t('push_requires_setup'))
+    } else if (result === 'unsupported') {
+      toast.info(t('push_not_supported'))
+    } else {
       toast.error(t('browser_notifications_denied'))
     }
+    return false
+  }
+
+  /** إشعارات الرسائل: مفتاح الحساب يحكم الإرسال، والاشتراك يخدم هذا الجهاز. */
+  const onMessagesChange = async (value: boolean) => {
+    if (value) {
+      // نطلب الصلاحية أولاً ضمن نقر المستخدم (مهم على Safari/iOS)
+      if (pushStatus !== 'active') await ensurePushSubscription()
+      await patch({ browser: true })
+      return
+    }
+    await patch({ browser: false })
+    // عند الإيقاف لا نلغي الاشتراك: قد يبقى مستخدماً لإشعارات المكالمات.
+  }
+
+  /** إشعارات المكالمات مستقلة عن إشعارات الرسائل. */
+  const onCallsChange = async (value: boolean) => {
+    if (value && pushStatus !== 'active') await ensurePushSubscription()
+    await patch({ calls: value })
   }
 
   return (
@@ -583,7 +661,12 @@ function NotificationsSection() {
         <Switch
           label={t('notification_message')}
           checked={settings.browser}
-          onChange={(value) => void patch({ browser: value })}
+          onChange={(value) => void onMessagesChange(value)}
+        />
+        <Switch
+          label={t('notification_calls')}
+          checked={settings.calls !== false}
+          onChange={(value) => void onCallsChange(value)}
         />
         <Switch label={t('notification_sounds')} checked={settings.sounds} onChange={(value) => void patch({ sounds: value })} />
         <Switch label={t('notification_preview')} checked={settings.preview} onChange={(value) => void patch({ preview: value })} />
@@ -594,24 +677,53 @@ function NotificationsSection() {
         />
       </div>
 
-      {permission !== 'granted' && (
-        <div className="mt-4 rounded-2xl bg-ink-50 p-4 dark:bg-ink-800/60">
-          <p className="mb-3 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-            {permission === 'denied'
-              ? t('browser_notifications_denied')
-              : permission === 'unsupported'
-                ? t('push_not_supported')
-                : t('enable_browser_notifications')}
-          </p>
-          <Button size="sm" variant="subtle" onClick={() => void requestPermission()} disabled={permission === 'unsupported'}>
-            {t('enable_browser_notifications')}
-          </Button>
-        </div>
-      )}
+      <div className="mt-4 rounded-2xl bg-ink-50 p-4 dark:bg-ink-800/60">
+        <p className="text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+          {permission === 'denied'
+            ? t('push_permission_denied_device')
+            : permission === 'unsupported'
+              ? t('push_not_supported')
+              : pushStatus === 'active'
+                ? t('push_active')
+                : pushStatus === 'not_configured'
+                  ? t('push_requires_setup')
+                  : pushStatus === 'unsupported'
+                    ? t('push_not_supported')
+                    : t('push_inactive')}
+        </p>
 
-      <p className="mt-4 text-xs leading-relaxed text-ink-400">
-        {VAPID_PUBLIC_KEY ? t('enable_browser_notifications') : t('push_requires_setup')}
-      </p>
+        {permission !== 'denied' && permission !== 'unsupported' && pushStatus !== 'active' && pushStatus !== 'not_configured' && (
+          <Button
+            size="sm"
+            variant="subtle"
+            className="mt-3"
+            onClick={() => void ensurePushSubscription()}
+            disabled={working || pushStatus === 'unsupported'}
+          >
+            {t('push_enable_background')}
+          </Button>
+        )}
+
+        {pushStatus === 'active' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mt-3"
+            onClick={() => {
+              setWorking(true)
+              void disablePush().finally(() => {
+                setPushStatus('inactive')
+                setWorking(false)
+              })
+            }}
+            disabled={working}
+          >
+            {t('push_disable_background')}
+          </Button>
+        )}
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-400">{t('push_ios_hint')}</p>
     </SectionCard>
   )
 }

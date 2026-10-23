@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Trash2,
   User as UserIcon,
+  UserPlus,
   Users,
   UsersRound,
   X,
@@ -236,6 +237,25 @@ export function ConversationList() {
           </div>
         )}
 
+        {/* البحث عن مستخدم وبدء محادثة جديدة */}
+        {term.trim().length >= 2 && (
+          <button
+            type="button"
+            onClick={() => setShowNew(true)}
+            className="flex w-full items-center gap-3 border-b border-ink-100 bg-brand-50/50 px-4 py-3 text-start transition hover:bg-brand-50 dark:border-ink-800 dark:bg-brand-950/20 dark:hover:bg-brand-950/40"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white">
+              <UserPlus className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-brand-800 dark:text-brand-200">
+                {t('search_users_cta', { term: term.trim() })}
+              </span>
+              <span className="block text-[11px] text-ink-500 dark:text-ink-400">{t('search_users_hint')}</span>
+            </span>
+          </button>
+        )}
+
         {/* نتائج البحث في الرسائل */}
         {term.trim().length >= 2 && (searching || searchResults.length > 0) && (
           <div className="mb-1 border-b border-ink-100 pb-1 dark:border-ink-800">
@@ -334,7 +354,7 @@ export function ConversationList() {
 
               <Dropdown
                 align="end"
-                className="opacity-0 transition group-hover:opacity-100 focus-within:opacity-100"
+                className="opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100"
                 trigger={() => (
                   <button
                     type="button"
@@ -399,7 +419,7 @@ export function ConversationList() {
         })}
       </div>
 
-      <NewChatModal open={showNew} onClose={() => setShowNew(false)} />
+      <NewChatModal open={showNew} onClose={() => setShowNew(false)} initialTerm={term.trim()} />
 
       <ConfirmDialog
         open={Boolean(confirmClear)}

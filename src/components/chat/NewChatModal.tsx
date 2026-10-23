@@ -13,9 +13,10 @@ import { NewGroupModal } from './NewGroupModal'
 interface NewChatModalProps {
   open: boolean
   onClose: () => void
+  initialTerm?: string
 }
 
-export function NewChatModal({ open, onClose }: NewChatModalProps) {
+export function NewChatModal({ open, onClose, initialTerm }: NewChatModalProps) {
   const { t } = useApp()
   const { startDirect, onlineUsers } = useChat()
   const toast = useToast()
@@ -60,6 +61,8 @@ export function NewChatModal({ open, onClose }: NewChatModalProps) {
             onSelect={(profile) => void openUser(profile.id)}
             onlineUsers={onlineUsers}
             emptyHint={t('no_contacts_hint')}
+            initialTerm={initialTerm}
+            autoFocus
           />
         </div>
       </Modal>

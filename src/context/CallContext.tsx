@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { getIceServers, hasTurnServer, isSupabaseConfigured, supabase } from '@/lib/supabase'
+import { getIceServers, probeTurn } from '@/lib/webrtc'
+import { closeCallNotification } from '@/lib/push'
+import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import * as api from '@/lib/api'
 import { createRingtone, type Ringtone } from '@/lib/ringtone'
 import { errorKey } from '@/lib/utils'
@@ -70,6 +72,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
   const [micEnabled, setMicEnabled] = useState(true)
   const [cameraEnabled, setCameraEnabled] = useState(true)
+  const [turnConfigured, setTurnConfigured] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -90,6 +93,21 @@ export function CallProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     callRef.current = call
   }, [call])
+
+  // فحص توفّر TURN مرة واحدة عند الدخول (البيانات تُجلب من Edge Function).
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) {
+      setTurnConfigured(false)
+      return
+    }
+    let alive = true
+    void probeTurn().then((available) => {
+      if (alive) setTurnConfigured(available)
+    })
+    return () => {
+      alive = false
+    }
+  }, [user])
 
   const stopRingtone = useCallback(() => {
     ringtoneRef.current?.stop()
@@ -155,6 +173,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
           endedAt,
           durationSeconds: duration,
         })
+        void closeCallNotification(current.id)
         try {
           await api.updateCall(current.id, {
             status: nextStatus,
@@ -181,7 +200,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   const createPeerConnection = useCallback(
     async (callId: string) => {
-      const pc = new RTCPeerConnection({ iceServers: getIceServers(), iceCandidatePoolSize: 4 })
+      const iceServers = await getIceServers()
+      const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 4 })
       pcRef.current = pc
 
       pc.onicecandidate = (event) => {
@@ -203,6 +223,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
         const state = pc.connectionState
         setCall((prev) => (prev ? { ...prev, iceState: state } : prev))
         if (state === 'connected') {
+          if (ringTimerRef.current) {
+            window.clearTimeout(ringTimerRef.current)
+            ringTimerRef.current = null
+          }
           setCall((prev) =>
             prev && (prev.phase === 'connecting' || prev.phase === 'outgoing' || prev.phase === 'incoming')
               ? { ...prev, phase: 'active', answeredAt: prev.answeredAt ?? Date.now(), iceState: state }
@@ -308,6 +332,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
             if (offerRetryRef.current) {
               window.clearInterval(offerRetryRef.current)
               offerRetryRef.current = null
+            }
+            if (ringTimerRef.current) {
+              window.clearTimeout(ringTimerRef.current)
+              ringTimerRef.current = null
             }
             setCall((prev) => (prev ? { ...prev, phase: 'connecting' } : prev))
           } catch (error) {
@@ -456,6 +484,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         async (payload) => {
           const record = payload.new as { id: string; caller_id: string; type: CallMode; conversation_id: string | null; status: string }
           if (!record?.id || record.status !== 'ringing') return
+          if (incomingCallIdsRef.current.has(record.id)) return
           if (callRef.current) {
             // مشغول — نرفض تلقائياً
             await api.updateCall(record.id, { status: 'declined', ended_at: new Date().toISOString() })
@@ -480,6 +509,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
           callRef.current = nextCall
           setCall(nextCall)
           playRingtone('incoming')
+          ringTimerRef.current = window.setTimeout(() => {
+            void finishCall('missed')
+          }, RING_TIMEOUT_MS)
         },
       )
       .on(
@@ -507,6 +539,92 @@ export function CallProvider({ children }: { children: ReactNode }) {
   }, [user, playRingtone, finishCall, toast, t])
 
   // --------------------------------------------------------------------------
+  // استئناف مكالمة رنين عند فتح التطبيق من إشعار (أو بعد إعادة تحميل الصفحة)
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) return
+    let cancelled = false
+
+    const presentPendingCall = async () => {
+      const hash = window.location.hash
+      const queryIndex = hash.indexOf('?')
+      const params = new URLSearchParams(queryIndex >= 0 ? hash.slice(queryIndex + 1) : '')
+      const requestedCallId = params.get('call')
+      const shouldDecline = params.get('action') === 'decline'
+
+      // إذا كانت المكالمة معروضة بالفعل وطُلب رفضها من الإشعار
+      if (shouldDecline && requestedCallId && callRef.current?.id === requestedCallId) {
+        try {
+          await api.updateCall(requestedCallId, {
+            status: 'declined',
+            ended_at: new Date().toISOString(),
+          })
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+      if (callRef.current) return
+
+      const cutoff = new Date(Date.now() - RING_TIMEOUT_MS).toISOString()
+      let query = supabase
+        .from('calls')
+        .select('*')
+        .eq('callee_id', user.id)
+        .eq('status', 'ringing')
+        .gte('started_at', cutoff)
+        .order('started_at', { ascending: false })
+        .limit(1)
+
+      if (requestedCallId) query = query.eq('id', requestedCallId)
+      const { data, error } = await query.maybeSingle()
+      if (cancelled || error || !data) return
+      if (incomingCallIdsRef.current.has(data.id)) return
+      incomingCallIdsRef.current.add(data.id)
+
+      if (shouldDecline) {
+        try {
+          await api.updateCall(data.id, { status: 'declined', ended_at: new Date().toISOString() })
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+
+      const partner = await api.fetchUserProfile(data.caller_id)
+      if (!partner || cancelled || callRef.current) return
+
+      const nextCall: ActiveCall = {
+        id: data.id,
+        conversationId: data.conversation_id,
+        partner,
+        mode: data.type,
+        direction: 'incoming',
+        phase: 'incoming',
+        startedAt: new Date(data.started_at).getTime(),
+        answeredAt: null,
+        endedAt: null,
+        durationSeconds: 0,
+        iceState: 'new',
+      }
+      callRef.current = nextCall
+      setCall(nextCall)
+      playRingtone('incoming')
+      ringTimerRef.current = window.setTimeout(() => {
+        void finishCall('missed')
+      }, RING_TIMEOUT_MS)
+    }
+
+    void presentPendingCall()
+    const onHashChange = () => void presentPendingCall()
+    window.addEventListener('hashchange', onHashChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener('hashchange', onHashChange)
+    }
+  }, [user, playRingtone, finishCall])
+
+  // --------------------------------------------------------------------------
   // قبول المكالمة
   // --------------------------------------------------------------------------
   const acceptCall = useCallback(async () => {
@@ -517,6 +635,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
       return
     }
     stopRingtone()
+    void closeCallNotification(current.id)
+    if (ringTimerRef.current) {
+      window.clearTimeout(ringTimerRef.current)
+      ringTimerRef.current = null
+    }
     try {
       await ensureLocalStream(current.mode)
       await createPeerConnection(current.id)
@@ -598,7 +721,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       remoteStream,
       micEnabled,
       cameraEnabled,
-      turnConfigured: hasTurnServer,
+      turnConfigured,
       supported,
       startCall,
       acceptCall,
@@ -614,6 +737,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       remoteStream,
       micEnabled,
       cameraEnabled,
+      turnConfigured,
       supported,
       startCall,
       acceptCall,

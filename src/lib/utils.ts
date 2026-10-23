@@ -245,3 +245,81 @@ export function copyToClipboard(text: string): Promise<boolean> {
 export function isSystemDark(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
 }
+
+// ----------------------------------------------------------------------------
+// روابط النصوص: لا نحوّل أي نص إلى رابط إلا إذا كان رابطاً حقيقياً (http/https)
+// ----------------------------------------------------------------------------
+export interface TextSegment {
+  text: string
+  href?: string
+}
+
+const WEB_URL_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"']+/gi
+
+function normalizeWebUrl(raw: string): string {
+  return raw.startsWith('www.') ? `https://${raw}` : raw
+}
+
+/**
+ * تقسيم نص الرسالة إلى مقاطع، مع تحويل الروابط الحقيقية فقط إلى روابط قابلة للنقر.
+ * لا نُنشئ روابط من البريد أو الأرقام أو النصوص العادية.
+ */
+export function splitTextLinks(text: string): TextSegment[] {
+  if (!text) return []
+  const segments: TextSegment[] = []
+  const pattern = new RegExp(WEB_URL_PATTERN.source, 'gi')
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text))) {
+    const rawMatch = match[0]
+    let raw = rawMatch
+    let trailing = ''
+    // علامات ترقيم في نهاية الرابط لا تنتمي إليه
+    while (raw.length > 0 && /[.,;:!?)\]}»”']$/.test(raw)) {
+      trailing = raw.slice(-1) + trailing
+      raw = raw.slice(0, -1)
+    }
+    if (match.index > cursor) segments.push({ text: text.slice(cursor, match.index) })
+    if (raw.length >= 6) {
+      segments.push({ text: raw, href: normalizeWebUrl(raw) })
+    } else if (raw) {
+      segments.push({ text: raw })
+    }
+    if (trailing) segments.push({ text: trailing })
+    cursor = match.index + rawMatch.length
+  }
+  if (cursor < text.length) segments.push({ text: text.slice(cursor) })
+  return segments.length ? segments : [{ text }]
+}
+
+/**
+ * تنزيل ملف حقيقي عند طلب المستخدم فقط.
+ * نجلبه كـ blob حتى يعمل التنزيل أيضاً مع الروابط الموقّعة عبر النطاقات،
+ * ثم نستخدم رابطاً محلياً مع خاصية download (لا يعتمد على سلوك المتصفح).
+ */
+export async function downloadFromUrl(url: string, filename: string): Promise<void> {
+  const safeName = sanitizeFileName(filename || 'download')
+  try {
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = safeName
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 5000)
+  } catch {
+    // احتياطي: فتح الرابط في نافذة جديدة (قد يعرضه المتصفح أو ينزّله)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.target = '_blank'
+    anchor.rel = 'noopener noreferrer'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }
+}

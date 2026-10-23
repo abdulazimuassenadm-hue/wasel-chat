@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="120" cy="221" rx="62" ry="8" fill="#0f172a" opacity=".10"/>
+  <path d="M120 26 C176 26 208 62 208 120 C208 180 172 212 120 212 C68 212 32 180 32 120 C32 62 64 26 120 26 Z" fill="url(#body)"/>
+  <ellipse cx="86" cy="66" rx="34" ry="20" fill="#ffffff" opacity=".18" transform="rotate(-22 86 66)"/>
+  
+  
+      <rect x="66" y="98" width="44" height="27" rx="11" fill="#0f172a"/>
+      <rect x="130" y="98" width="44" height="27" rx="11" fill="#0f172a"/>
+      <rect x="108" y="107" width="24" height="6" rx="3" fill="#0f172a"/>
+      <path d="M73 104 L82 120" stroke="#ffffff" stroke-width="3" opacity=".35" stroke-linecap="round"/>
+  
+  <path d="M100 154 Q120 166 140 148" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+  <path transform="translate(198 62) scale(0.5)" d="M0 -12 C2 -4 4 -2 12 0 C4 2 2 4 0 12 C-2 4 -4 2 -12 0 C-4 -2 -2 -4 0 -12 Z" fill="#fef08a"/></svg>

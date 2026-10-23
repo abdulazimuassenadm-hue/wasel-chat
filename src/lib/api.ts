@@ -21,6 +21,7 @@ import type {
   Status,
   StatusView,
   UserBlock,
+  UserSticker,
 } from '@/types'
 
 /** فك تغليف نتيجة Supabase مع رفع الخطأ */
@@ -116,6 +117,16 @@ export async function findByEmail(email: string): Promise<PublicProfile | null> 
   return { ...(rows[0] as PublicProfile) }
 }
 
+/**
+ * البحث عن مستخدم برقم الهاتف.
+ * يعمل عبر دالة خادم آمنة (security definer) تطبّق سياسات الخصوصية،
+ * ولا تعيد أرقام الهواتف نفسها — فقط الملف العام المطابق.
+ */
+export async function searchUserByPhone(query: string): Promise<PublicProfile[]> {
+  const result = await supabase.rpc('search_user_by_phone', { p_query: query })
+  return unwrap<PublicProfile[]>(result, 'searchUserByPhone') ?? []
+}
+
 export async function setPresence(
   userId: string,
   presence: 'online' | 'away' | 'offline',
@@ -181,6 +192,60 @@ export async function getSignedUrls(
     if (item.path && item.signedUrl) map[item.path] = item.signedUrl
   }
   return map
+}
+
+// ============================================================================
+// 2.5) ملصقات المستخدم («ملصقاتي»)
+// ============================================================================
+
+function randomStickerId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
+}
+
+export async function listUserStickers(userId: string): Promise<UserSticker[]> {
+  const result = await supabase
+    .from('user_stickers')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+  const rows = unwrap<UserSticker[]>(result, 'listUserStickers') ?? []
+  if (!rows.length) return []
+  const urls = await getSignedUrls(BUCKETS.stickers, rows.map((row) => row.path))
+  return rows.map((row) => ({ ...row, url: urls[row.path] ?? null }))
+}
+
+export async function createUserSticker(userId: string, blob: Blob, name: string): Promise<UserSticker> {
+  const type = blob.type || 'image/png'
+  const ext = type.includes('webp') ? 'webp' : type.includes('jpeg') ? 'jpg' : 'png'
+  const path = `${userId}/${randomStickerId()}.${ext}`
+  const { error } = await supabase.storage.from(BUCKETS.stickers).upload(path, blob, {
+    cacheControl: '31536000',
+    upsert: false,
+    contentType: type,
+  })
+  if (error) throw error
+
+  const label = name.trim().slice(0, 60) || 'ملصق'
+  const result = await supabase
+    .from('user_stickers')
+    .insert({ user_id: userId, name: label, bucket: BUCKETS.stickers, path })
+    .select('*')
+    .single()
+  const row = unwrap<UserSticker>(result, 'createUserSticker')
+  const url = await getSignedUrl(BUCKETS.stickers, path, 3600)
+  return { ...row, url }
+}
+
+export async function deleteUserSticker(sticker: UserSticker): Promise<void> {
+  const result = await supabase.from('user_stickers').delete().eq('id', sticker.id)
+  if (result.error) throw result.error
+  if (sticker.path) {
+    await supabase.storage.from(sticker.bucket || BUCKETS.stickers).remove([sticker.path])
+  }
 }
 
 // ============================================================================
@@ -887,7 +952,7 @@ export async function savePushSubscription(input: {
   auth: string
   userAgent?: string
 }): Promise<void> {
-  await supabase.from('push_subscriptions').upsert(
+  const { error } = await supabase.from('push_subscriptions').upsert(
     {
       user_id: input.userId,
       endpoint: input.endpoint,
@@ -897,10 +962,12 @@ export async function savePushSubscription(input: {
     },
     { onConflict: 'endpoint' },
   )
+  if (error) throw error
 }
 
 export async function removePushSubscription(endpoint: string): Promise<void> {
-  await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
+  const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint)
+  if (error) throw error
 }
 
 // ============================================================================

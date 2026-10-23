@@ -19,6 +19,31 @@ export function AppLayout() {
     if (notice) toast.success(notice)
   }, [toast])
 
+  // على iOS لا يقلّل المتصفح ارتفاع الصفحة عند فتح لوحة المفاتيح،
+  // فنضبط ارتفاع التطبيق على الارتفاع المرئي الفعلي حتى يبقى شريط الكتابة ظاهراً.
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const root = document.documentElement
+    const update = () => {
+      // نتجاهل التكبير بإصبعين (scale > 1) حتى لا نسحق الواجهة
+      const keyboard = window.innerHeight - viewport.height - viewport.offsetTop
+      if (viewport.scale <= 1.01 && keyboard > 120) {
+        root.style.setProperty('--app-height', `${Math.round(viewport.height)}px`)
+      } else {
+        root.style.removeProperty('--app-height')
+      }
+    }
+    update()
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+      root.style.removeProperty('--app-height')
+    }
+  }, [])
+
   return (
     <div className="flex h-dvh-screen overflow-hidden bg-ink-50 dark:bg-ink-950">
       <NavRail />

@@ -267,7 +267,7 @@ const ar: Record<string, string> = {
 
   // المستخدمون والجهات
   contacts_title: 'جهات الاتصال',
-  search_users: 'ابحث بالاسم أو اسم المستخدم أو البريد',
+  search_users: 'ابحث بالاسم أو اسم المستخدم أو البريد أو رقم الهاتف',
   no_contacts: 'لا توجد جهات اتصال بعد',
   no_contacts_hint: 'ابحث عن مستخدمين على المنصة وأضفهم إلى جهات اتصالك.',
   add_contact: 'إضافة لجهات الاتصال',
@@ -370,20 +370,21 @@ const ar: Record<string, string> = {
   audio_call: 'مكالمة صوتية',
   video_call_short: 'مكالمة مرئية',
   call_failed: 'فشلت المكالمة',
-  call_failed_hint: 'تعذّر الاتصال. قد تحتاج الشبكة إلى خادم TURN.',
+  call_failed_hint: 'تعذّر الاتصال. تحقّق من الشبكة ومن إعداد خادم TURN.',
   no_answer: 'لا إجابة',
   call_denied_permission: 'يرجى السماح بالوصول إلى الميكروفون/الكاميرا.',
   call_not_supported: 'متصفحك لا يدعم المكالمات. جرّب Chrome أو Edge أو Safari حديثاً.',
   ice_state: 'حالة الاتصال: {s}',
   call_quality_poor: 'جودة الاتصال ضعيفة',
   turn_required_hint:
-    'لضمان عمل المكالمات على جميع الشبكات أضف خادم TURN في ملف .env.local (انظر README).',
+    'لم يُضبط خادم TURN بعد؛ تعمل المكالمات عبر STUN فقط وقد تفشل على شبكات الشركات والبيانات. راجع دليل الإعداد.',
   call_started: 'بدأت المكالمة',
 
   // الإشعارات
   notifications: 'الإشعارات',
   notifications_settings: 'إعدادات الإشعارات',
   notification_message: 'الرسائل الجديدة',
+  notification_calls: 'المكالمات الواردة',
   notification_sounds: 'أصوات الإشعارات',
   notification_browser: 'إشعارات المتصفح',
   notification_preview: 'إظهار معاينة الرسالة',
@@ -393,7 +394,15 @@ const ar: Record<string, string> = {
   push_not_supported: 'هذا المتصفح لا يدعم الإشعارات.',
   no_notifications: 'لا توجد إشعارات',
   mark_all_read: 'تعليم الكل كمقروء',
-  push_requires_setup: 'الإشعارات خارج الصفحة تحتاج إعداد مفاتيح VAPID و Edge Function.',
+  push_requires_setup: 'إشعارات الخلفية تحتاج نشر Edge Function وضبط مفاتيح VAPID.',
+  push_enable_background: 'تفعيل إشعارات الخلفية',
+  push_disable_background: 'إيقاف إشعارات الخلفية لهذا الجهاز',
+  push_active: 'إشعارات الخلفية مفعّلة على هذا الجهاز.',
+  push_inactive: 'إشعارات الخلفية غير مفعّلة على هذا الجهاز.',
+  push_enabled_success: 'تم تفعيل إشعارات الخلفية.',
+  push_permission_denied_device:
+    'الإشعارات موقوفة من إعدادات المتصفح أو الهاتف. فعّلها من إعدادات الجهاز ثم أعد المحاولة.',
+  push_ios_hint: 'على iPhone/iPad أضف «واصل» إلى الشاشة الرئيسية أولاً؛ إشعارات الويب تتطلب iOS 16.4 أو أحدث.',
   notif_new_message_from: 'رسالة جديدة من {name}',
   notif_missed_call_from: 'مكالمة فائتة من {name}',
 
@@ -645,6 +654,52 @@ const ar: Record<string, string> = {
     'الإخفاء يُطبَّق على مستوى الحساب: يراه الآخرون على أجهزتهم أيضاً. يُحفظ اسمك الأصلي على هذا الجهاز فقط لتعود إليه بنقرة واحدة.',
   hide_name_restore_missing: 'لم نجد اسمك الأصلي على هذا الجهاز — اكتبه من تبويب «الملف الشخصي».',
   hide_name_failed: 'تعذّر تحديث إعدادات الاسم.',
+
+  // الملصقات
+  stickers: 'ملصقات',
+  sticker: 'ملصق',
+  sticker_my: 'ملصقاتي',
+  sticker_add_short: 'إضافة',
+  sticker_crop_title: 'تجهيز الملصق',
+  sticker_crop_hint: 'حرّك الصورة وكبّرها لتحديد ما سيظهر في الملصق.',
+  sticker_crop_drag_hint: 'اسحب الصورة للتحريك',
+  sticker_zoom: 'تكبير',
+  sticker_zoom_in: 'تكبير',
+  sticker_zoom_out: 'تصغير',
+  sticker_reset: 'إعادة الضبط',
+  sticker_name: 'اسم الملصق (اختياري)',
+  sticker_name_placeholder: 'مثال: ملصق ترحيب',
+  sticker_preview_title: 'معاينة الملصق',
+  sticker_send: 'إرسال الملصق',
+  sticker_saved: 'تم حفظ الملصق في «ملصقاتي».',
+  sticker_saved_failed: 'تعذّر تجهيز الملصق. جرّب صورة أخرى.',
+  sticker_deleted: 'تم حذف الملصق من مكتبتك.',
+  sticker_delete_title: 'حذف الملصق',
+  sticker_delete_desc: 'سيُحذف من ملصقاتك فقط. الملصقات المرسلة في المحادثات تبقى كما هي.',
+  sticker_library_empty_hint: 'أضف صورة من هاتفك لتصبح ملصقاً، ثم أرسله في أي محادثة.',
+  sticker_upload_unavailable:
+    'مكتبة «ملصقاتي» تحتاج تفعيلاً في قاعدة البيانات (جدول user_stickers وحاوية stickers). اطلب من المشرف تطبيق ملف supabase/upgrade-2026-10-chat.sql، ويمكنك استخدام الملصقات الجاهزة الآن.',
+  sticker_send_failed: 'تعذّر إرسال الملصق. تحقّق من اتصالك وحاول مجدداً.',
+
+  // الملفات والرسائل
+  file_preview: 'معلومات الملف',
+  file_open: 'فتح في نافذة جديدة',
+  file_download_hint: 'لن يبدأ التنزيل إلا عند الضغط على زر التنزيل. يمكنك معاينة الملف أولاً.',
+  loading_messages: 'جارٍ تحميل الرسائل…',
+  messages_load_failed: 'تعذّر تحميل الرسائل. تحقّق من اتصالك ثم أعد المحاولة.',
+  retry_unavailable: 'لا يمكن إعادة إرسال هذه الرسالة من هنا. جرّب إرسالها من جديد.',
+  jump_to_original: 'الانتقال إلى الرسالة الأصلية',
+  original_message_missing: 'الرسالة الأصلية لم تعد ضمن الرسائل المحمّلة في هذه المحادثة.',
+
+  // البحث برقم الهاتف
+  phone_label: 'رقم الهاتف (اختياري)',
+  phone_hint: 'يُستخدم للعثور عليك برقم الهاتف. لا يظهر رقمك للآخرين، ولا يُعرض إلا لمن يكتب الرقم مطابقاً.',
+  phone_invalid: 'أدخل رقم هاتف صحيحاً (7 أرقام على الأقل).',
+  phone_search_unavailable:
+    'البحث برقم الهاتف غير مفعّل على الخادم بعد. اطلب من المشرف تطبيق دالة search_user_by_phone من ملف التحديث.',
+  search_users_cta: 'البحث عن «{term}» وبدء محادثة',
+  search_users_hint: 'ابحث بالاسم أو اسم المستخدم أو رقم الهاتف',
+  search_no_results_hint: 'تأكد من الاسم أو رقم الهاتف (7 أرقام على الأقل)، أو جرّب البحث باسم المستخدم.',
 }
 
 const en: Record<string, string> = {
@@ -902,7 +957,7 @@ const en: Record<string, string> = {
   online_count: '{n} online',
 
   contacts_title: 'Contacts',
-  search_users: 'Search by name, username or email',
+  search_users: 'Search by name, username, email, or phone number',
   no_contacts: 'No contacts yet',
   no_contacts_hint: 'Find users on the platform and add them to your contacts.',
   add_contact: 'Add to contacts',
@@ -1003,18 +1058,20 @@ const en: Record<string, string> = {
   audio_call: 'Audio call',
   video_call_short: 'Video call',
   call_failed: 'Call failed',
-  call_failed_hint: 'Could not connect. This network may require a TURN server.',
+  call_failed_hint: 'Could not connect. Check the network and TURN configuration.',
   no_answer: 'No answer',
   call_denied_permission: 'Please allow microphone/camera access.',
   call_not_supported: 'Your browser does not support calls. Try a recent Chrome, Edge or Safari.',
   ice_state: 'Connection state: {s}',
   call_quality_poor: 'Poor connection quality',
-  turn_required_hint: 'For reliable calls on all networks add a TURN server in .env.local (see README).',
+  turn_required_hint:
+    'TURN is not configured; calls use STUN only and may fail on corporate/mobile networks. See the setup guide.',
   call_started: 'Call started',
 
   notifications: 'Notifications',
   notifications_settings: 'Notification settings',
   notification_message: 'New messages',
+  notification_calls: 'Incoming calls',
   notification_sounds: 'Notification sounds',
   notification_browser: 'Browser notifications',
   notification_preview: 'Show message preview',
@@ -1024,7 +1081,15 @@ const en: Record<string, string> = {
   push_not_supported: 'This browser does not support notifications.',
   no_notifications: 'No notifications',
   mark_all_read: 'Mark all as read',
-  push_requires_setup: 'Background push requires VAPID keys and an Edge Function.',
+  push_requires_setup: 'Background notifications require deploying the Edge Function and setting VAPID keys.',
+  push_enable_background: 'Enable background notifications',
+  push_disable_background: 'Disable background notifications on this device',
+  push_active: 'Background notifications are enabled on this device.',
+  push_inactive: 'Background notifications are not enabled on this device.',
+  push_enabled_success: 'Background notifications enabled.',
+  push_permission_denied_device:
+    'Notifications are blocked in the browser/device settings. Enable them there and try again.',
+  push_ios_hint: 'On iPhone/iPad, add Wasel to the Home Screen first; web push requires iOS 16.4+.',
   notif_new_message_from: 'New message from {name}',
   notif_missed_call_from: 'Missed call from {name}',
 
@@ -1270,6 +1335,52 @@ const en: Record<string, string> = {
     'Hiding applies to the whole account: others see it on their devices too. Your original name is stored on this device only so you can restore it with one tap.',
   hide_name_restore_missing: 'We could not find your original name on this device — type it in the "Profile" tab.',
   hide_name_failed: 'Could not update your name settings.',
+
+  // Stickers
+  stickers: 'Stickers',
+  sticker: 'Sticker',
+  sticker_my: 'My stickers',
+  sticker_add_short: 'Add',
+  sticker_crop_title: 'Prepare sticker',
+  sticker_crop_hint: 'Move and zoom the image to choose what the sticker will show.',
+  sticker_crop_drag_hint: 'Drag the image to move it',
+  sticker_zoom: 'Zoom',
+  sticker_zoom_in: 'Zoom in',
+  sticker_zoom_out: 'Zoom out',
+  sticker_reset: 'Reset',
+  sticker_name: 'Sticker name (optional)',
+  sticker_name_placeholder: 'e.g. Welcome sticker',
+  sticker_preview_title: 'Sticker preview',
+  sticker_send: 'Send sticker',
+  sticker_saved: 'Saved to "My stickers".',
+  sticker_saved_failed: 'Could not prepare the sticker. Try another image.',
+  sticker_deleted: 'Sticker removed from your library.',
+  sticker_delete_title: 'Delete sticker',
+  sticker_delete_desc: 'It will be removed from your library only. Stickers already sent in chats stay as they are.',
+  sticker_library_empty_hint: 'Add an image from your phone to turn it into a sticker, then send it in any chat.',
+  sticker_upload_unavailable:
+    'The "My stickers" library needs to be enabled in the database (user_stickers table and stickers bucket). Ask the admin to run supabase/upgrade-2026-10-chat.sql — built-in stickers work now.',
+  sticker_send_failed: 'Could not send the sticker. Check your connection and try again.',
+
+  // Files and messages
+  file_preview: 'File details',
+  file_open: 'Open in new tab',
+  file_download_hint: 'The download starts only when you tap Download. You can preview the file first.',
+  loading_messages: 'Loading messages…',
+  messages_load_failed: 'Could not load messages. Check your connection and try again.',
+  retry_unavailable: 'This message cannot be retried from here. Please send it again.',
+  jump_to_original: 'Jump to the original message',
+  original_message_missing: 'The original message is not among the messages loaded in this chat.',
+
+  // Phone search
+  phone_label: 'Phone number (optional)',
+  phone_hint: 'Used to find you by phone. Your number is not shown to others and appears only to an exact search.',
+  phone_invalid: 'Enter a valid phone number (at least 7 digits).',
+  phone_search_unavailable:
+    'Phone search is not enabled on the server yet. Ask the admin to apply the search_user_by_phone function from the upgrade file.',
+  search_users_cta: 'Find "{term}" and start a chat',
+  search_users_hint: 'Search by name, username, or phone number',
+  search_no_results_hint: 'Check the name or phone number (at least 7 digits), or try the username.',
 }
 
 export const dictionaries: Record<Lang, Record<string, string>> = { ar, en }

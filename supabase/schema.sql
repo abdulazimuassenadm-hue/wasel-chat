@@ -29,7 +29,8 @@ create table if not exists public.profiles (
     'sounds', true,
     'browser', true,
     'preview', true,
-    'reactions', true
+    'reactions', true,
+    'calls', true
   ),
   onboarded boolean not null default false,
   is_suspended boolean not null default false,
@@ -316,7 +317,21 @@ create table if not exists public.push_subscriptions (
   created_at timestamptz not null default now()
 );
 
--- 1.17 إعدادات الخدمة (لوحة الإدارة)
+-- 1.17 منع تكرار إشعارات Web Push (للخادم فقط، لا وصول للمستخدمين)
+create table if not exists public.push_deliveries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  dedupe_key text not null unique,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_deliveries_user_created_idx
+  on public.push_deliveries (user_id, created_at desc);
+
+create index if not exists push_subscriptions_user_idx
+  on public.push_subscriptions (user_id);
+
+-- 1.18 إعدادات الخدمة (لوحة الإدارة)
 create table if not exists public.app_settings (
   key text primary key,
   value jsonb not null default '{}'::jsonb,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Ban, Flag, Info, LogOut, Search, ShieldAlert, Trash2, UserMinus, UserPlus, X, Check } from 'lucide-react'
+import { Ban, Download, Flag, Info, Loader2, LogOut, Search, ShieldAlert, Trash2, UserMinus, UserPlus, X, Check } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { useChat } from '@/context/ChatContext'
@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/Field'
 import { Badge } from '@/components/ui/Misc'
 import { UserPickerList } from './UserPicker'
 import * as api from '@/lib/api'
-import { cn, formatDateTime, formatLastSeen } from '@/lib/utils'
+import { cn, downloadFromUrl, formatDateTime, formatLastSeen } from '@/lib/utils'
 import type { ChatConversation, ChatMessage, PublicProfile } from '@/types'
 
 // ============================================================================
@@ -26,23 +26,62 @@ export function MediaLightbox({
   name?: string
   onClose: () => void
 }) {
+  const { t } = useApp()
+  const [downloading, setDownloading] = useState(false)
   if (!url) return null
+
+  const download = async () => {
+    setDownloading(true)
+    try {
+      await downloadFromUrl(url, name || 'image')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/90 p-4" onClick={onClose}>
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 end-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
-        aria-label="close"
-      >
-        <X className="h-6 w-6" />
-      </button>
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/90 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="absolute top-4 end-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            void download()
+          }}
+          disabled={downloading}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 disabled:opacity-60"
+          aria-label={t('download')}
+          title={t('download')}
+        >
+          {downloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+          aria-label={t('close')}
+          title={t('close')}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
       <img
         src={url}
-        alt={name}
-        className="max-h-[90dvh] max-w-full rounded-2xl object-contain animate-fade-in"
+        alt={name ?? ''}
+        draggable={false}
+        className="max-h-[88dvh] max-w-full rounded-2xl object-contain animate-fade-in"
         onClick={(event) => event.stopPropagation()}
       />
+      {name && (
+        <p className="pointer-events-none absolute inset-x-0 bottom-5 truncate px-6 text-center text-xs font-semibold text-white/80">
+          {name}
+        </p>
+      )}
     </div>
   )
 }

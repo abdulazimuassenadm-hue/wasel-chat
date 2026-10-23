@@ -211,32 +211,107 @@ npm run dev
 
 ## المكالمات و WebRTC (STUN / TURN)
 
-- يعمل التطبيق افتراضياً بـ **STUN** عام (`stun:stun.l.google.com:19302`).
-- بعض الشبكات (شركات/بيانات الجوال) تتطلب **TURN** وإلا ستفشل المكالمات. أضف في `.env.local`:
+**سبب الرسالة القديمة:** كان الكود يقرأ `VITE_TURN_URL` و`VITE_TURN_USERNAME` و`VITE_TURN_CREDENTIAL`، وهذه تُحقن داخل JavaScript المنشور، كما أن `.env.local` لا يُرفع إلى GitHub Actions ولا يُنشر مع GitHub Pages. لذلك كانت المكالمات تعمل عبر STUN فقط، وتظهر رسالة «أضف TURN في .env.local».
 
-  ```env
-  VITE_STUN_URL=stun:stun.l.google.com:19302
-  VITE_TURN_URL=turn:your-turn-host:3478
-  VITE_TURN_USERNAME=username
-  VITE_TURN_CREDENTIAL=password
-  ```
+**الحل الحالي:**
 
-- آلية **Signaling** مبنية على جدول `calls` وقنوات Supabase Realtime.
-- إن لم يُضبط TURN، ستعرض الواجهة تنبيهاً بذلك ولن تدّعي أن المكالمات تعمل في كل الشبكات.
+- STUN عام افتراضي: `stun:stun.l.google.com:19302` و`stun:stun.cloudflare.com:3478`.
+- لا توجد أي كلمة مرور TURN في الحزمة. يطلب التطبيق بيانات TURN مؤقتة عند تسجيل الدخول من Edge Function `turn-credentials`، التي تعيد بيانات صالحة لمدة محددة فقط.
+- عند غياب TURN تبقى المكالمات ممكنة على الشبكات المفتوحة، وتظهر ملاحظة صادقة داخل شاشة المكالمة.
+
+### إعداد TURN موثوق (مرة واحدة)
+
+1. جهّز خادم TURN يدعم `use-auth-secret` (coturn على VPS) أو مزوّداً يعطي بيانات مؤقتة. مثال coturn:
+
+   ```conf
+   listening-port=3478
+   tls-listening-port=5349
+   fingerprint
+   lt-cred-mech
+   use-auth-secret
+   static-auth-secret=<سر-طويل-عشوائي>
+   realm=turn.example.com
+   external-ip=<IP-العام>
+   # شهادة TLS لـ turns: (Let's Encrypt)
+   cert=/etc/letsencrypt/live/turn.example.com/fullchain.pem
+   pkey=/etc/letsencrypt/live/turn.example.com/privkey.pem
+   min-port=49152
+   max-port=65535
+   ```
+
+2. افتح المنافذ: `3478/tcp` و`3478/udp` و`5349/tcp` و`5349/udp`، ومجال UDP `49152–65535`، واسم نطاق بشهادة TLS عند استخدام `turns:`.
+
+3. انشر الدالة واضبط أسرارها (لا تضعها في Git أو GitHub Pages):
+
+   ```bash
+   supabase functions deploy turn-credentials
+   supabase secrets set \
+     TURN_URLS="turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp,turns:turn.example.com:5349?transport=tcp" \
+     TURN_SECRET="<نفس static-auth-secret>" \
+     TURN_TTL_SECONDS=3600
+   ```
+
+4. اختبر بـ [Trickle ICE](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/) من شبكة بيانات الجوال، ثم جرّب مكالمة بين جهازين على شبكتين مختلفتين.
+
+**التكلفة:** خادم VPS صغير لـ coturn عادةً ضمن نطاق 5–10 دولارات شهرياً + استهلاك النطاق. مزوّدات TURN المُدارة (Cloudflare Realtime TURN، Twilio Network Traversal، Metered) تسعّر حسب الاستخدام وغالباً لها طبقة مجانية محدودة؛ راجع أسعارها الحالية قبل الاعتماد عليها. TURN المجاني غير المحدود غير موثوق ولا يُنصح به.
+
+> لا يمكن اختبار سماع الصوت في الاتجاهين من داخل بيئة التطوير بلا حسابين وجهازين وشبكتين. الكود يتحقق من صلاحية الميكروفون وتبادل SDP/ICE، لكن اختبار TURN الفعلي يتطلب الخطوات أعلاه.
 
 ---
 
-## إشعارات الويب (Web Push، اختياري)
+## إشعارات الويب (Web Push) وإشعارات المكالمات
 
-- أنشئ مفتاح VAPID: `npx web-push generate-vapid-keys`.
-- ضع المفتاح العام في `.env.local`:
+**ما يعمل داخل الكود:**
 
-  ```env
-  VITE_VAPID_PUBLIC_KEY=BD...
-  ```
+- تسجيل Service Worker واستقبال `push` وعرض إشعارات النظام حتى عندما تكون الصفحة في الخلفية أو مغلقة (بعد الإعداد).
+- اشتراك لكل جهاز يُخزَّن في `push_subscriptions` (RLS: صاحب الاشتراك فقط).
+- Edge Function `push-notify` ترسل للرسائل والمكالمات، ولا ترسل للمرسل نفسه، وتحترم:
+  - إشعارات الرسائل (`browser`) والمكالمات (`calls`) على حدة.
+  - كتم المحادثة، والحساب الموقوف، وإعداد معاينة الرسالة، والأصوات.
+  - منع التكرار عبر `push_deliveries`.
+- الضغط على إشعار رسالة يفتح المحادثة الصحيحة عبر HashRouter.
+- إشعار المكالمة يحتوي اسم المتصل وصورته إن سمحت خصوصيته، وأزرار «رد» و«رفض» حيث تدعمها المنصة.
 
-- لتفعيل الإرسال عبر الخادم: انشر Edge Function لإرسال الإشعارات واستخدم المفتاح الخاص داخلها
-  (لا تضعه في الواجهة). الجدول `push_subscriptions` جاهز لتخزين الاشتراكات.
+### خطوات التفعيل
+
+1. نفّذ `supabase/upgrade-2026-10-notifications.sql` في SQL Editor (ينشئ `push_deliveries` ويضيف خيار `calls` دون حذف بيانات).
+2. أنشئ مفاتيح VAPID مرة واحدة:
+
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
+3. ضع **المفتاح العام** في متغيرات مستودع GitHub باسم `VITE_VAPID_PUBLIC_KEY` (آمن للنشر)، أو في `.env.local` محلياً.
+4. اضبط أسرار Supabase (المفتاح الخاص لا يغادر الخادم):
+
+   ```bash
+   supabase secrets set \
+     VAPID_SUBJECT="mailto:you@example.com" \
+     VAPID_PUBLIC_KEY="<العام>" \
+     VAPID_PRIVATE_KEY="<الخاص>" \
+     PUSH_WEBHOOK_SECRET="<سلسلة-عشوائية-طويلة>"
+   ```
+
+5. انشر الدالة:
+
+   ```bash
+   supabase functions deploy push-notify --no-verify-jwt
+   ```
+
+6. من Supabase → Database → Webhooks أنشئ Hookين على `public.messages` و`public.calls` عند `INSERT`، إلى:
+   `https://<project>.supabase.co/functions/v1/push-notify`
+   مع الترويسة `x-webhook-secret: <نفس PUSH_WEBHOOK_SECRET>`.
+7. من التطبيق: الإعدادات → الإشعارات → فعّل «الرسائل الجديدة» و/أو «المكالمات الواردة»، ثم اسمح بالإشعارات من المتصفح/الهاتف.
+
+### القيود الواقعية
+
+- **Android/Chrome:** يعمل Web Push، ويفضّل تثبيت التطبيق. قد يؤخر نظام توفير الطاقة الإشعارات قليلاً.
+- **iPhone/iPad:** يتطلب iOS 16.4+ وإضافة «واصل» إلى الشاشة الرئيسية، ثم السماح بالإشعارات. أزرار الإشعار قد لا تظهر على iOS؛ الضغط يفتح التطبيق.
+- **رفض المكالمة من الإشعار:** زر «رفض» يفتح التطبيق ويكمل الرفض بجلسة المستخدم؛ لا توجد طريقة موثوقة لإجراء رفض كامل والتطبيق مغلق عبر Web Push وحده. الإشعار المرتبط يُغلق عند الرد/الرفض/انتهاء المكالمة إذا كان التطبيق مفتوحاً؛ وإلا يبقى حتى يزيله النظام.
+- **الحساب الموقوف أو الإشعارات المرفوضة من النظام:** لا يمكن تجاوز قرار النظام؛ ستظهر رسالة توضيحية في الإعدادات.
+- **GitHub Pages:** لا يشغّل خادماً؛ لذلك الإرسال يتم حصراً عبر Supabase Edge Function وDatabase Webhooks. لا تضع `service_role` أو `VAPID_PRIVATE_KEY` في متغيرات `VITE_*`.
+
+> لا يمكن اختبار التسليم الفعلي إلى جهاز حقيقي من هذه البيئة بلا مفاتيح VAPID وجهاز مشترك. الاختبارات المنفذة محلياً تغطي بناء التطبيق، ومنطق Service Worker، وتوليد بيانات TURN، وعدم تسرب الأسرار.
 
 ---
 

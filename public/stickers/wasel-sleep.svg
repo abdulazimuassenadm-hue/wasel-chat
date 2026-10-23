@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3dd6bd"/>
+      <stop offset="1" stop-color="#0e8b7b"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="120" cy="221" rx="62" ry="8" fill="#0f172a" opacity=".10"/>
+  <path d="M120 26 C176 26 208 62 208 120 C208 180 172 212 120 212 C68 212 32 180 32 120 C32 62 64 26 120 26 Z" fill="url(#body)"/>
+  <ellipse cx="86" cy="66" rx="34" ry="20" fill="#ffffff" opacity=".18" transform="rotate(-22 86 66)"/>
+  
+  <path d="M80 108 Q92 120 104 108" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+          <path d="M136 114 Q148 101 160 114" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+  
+  <path d="M106 152 Q120 162 134 152" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+  
+      <text x="176" y="62" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#0ea5a0">z</text>
+      <text x="194" y="46" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#0ea5a0">Z</text>
+      <text x="210" y="28" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#0ea5a0">z</text></svg>

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, FileText, Loader2, Pause, Play } from 'lucide-react'
+import { Download, FileText, Info, Loader2, Pause, Play } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
-import { formatBytes, formatDuration, cn } from '@/lib/utils'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { formatBytes, formatDuration, cn, downloadFromUrl } from '@/lib/utils'
 import type { Attachment } from '@/types'
 
 export function ImageAttachment({
@@ -15,14 +17,20 @@ export function ImageAttachment({
 }) {
   const { t } = useApp()
   return (
-    <div className="relative overflow-hidden rounded-2xl">
+    <div className="group relative overflow-hidden rounded-2xl">
       {attachment.url ? (
-        <button type="button" onClick={() => onOpen(attachment.url as string, attachment.file_name)} className="block">
+        <button
+          type="button"
+          onClick={() => onOpen(attachment.url as string, attachment.file_name)}
+          className="block max-w-full"
+          aria-label={t('preview')}
+        >
           <img
             src={attachment.url}
             alt={attachment.file_name}
-            className={cn('max-h-80 w-full object-cover', compact ? 'max-w-[240px]' : 'max-w-[320px]')}
+            className={cn('max-h-80 w-full object-cover', compact ? 'max-w-[240px]' : 'max-w-[260px] sm:max-w-[320px]')}
             loading="lazy"
+            draggable={false}
           />
         </button>
       ) : (
@@ -135,36 +143,98 @@ export function AudioAttachment({ attachment, own }: { attachment: Attachment; o
 
 export function FileAttachment({ attachment, own }: { attachment: Attachment; own: boolean }) {
   const { t, lang } = useApp()
+  const [open, setOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const extension = attachment.file_name.split('.').pop()?.toUpperCase() ?? 'FILE'
 
+  const download = async () => {
+    if (!attachment.url) return
+    setDownloading(true)
+    try {
+      await downloadFromUrl(attachment.url, attachment.file_name)
+    } finally {
+      setDownloading(false)
+      setOpen(false)
+    }
+  }
+
   return (
-    <a
-      href={attachment.url ?? undefined}
-      target="_blank"
-      rel="noreferrer"
-      download={attachment.file_name}
-      className={cn(
-        'flex min-w-[210px] items-center gap-3 rounded-2xl p-3 transition',
-        own ? 'bg-white/15 hover:bg-white/25' : 'bg-ink-100 hover:bg-ink-200/70 dark:bg-ink-800 dark:hover:bg-ink-700',
-      )}
-    >
-      <span
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
         className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-          own ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-300',
+          'flex min-w-[210px] max-w-full items-center gap-3 rounded-2xl p-3 text-start transition',
+          own
+            ? 'bg-white/15 hover:bg-white/25'
+            : 'bg-ink-100 hover:bg-ink-200/70 dark:bg-ink-800 dark:hover:bg-ink-700',
         )}
       >
-        <FileText className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className={cn('block truncate text-sm font-semibold', own ? 'text-white' : 'text-ink-800 dark:text-ink-100')}>
-          {attachment.file_name}
+        <span
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+            own ? 'bg-white/20 text-white' : 'bg-brand-100 text-brand-700 dark:bg-brand-950 dark:text-brand-300',
+          )}
+        >
+          <FileText className="h-5 w-5" />
         </span>
-        <span className={cn('block text-[11px]', own ? 'text-white/80' : 'text-ink-500 dark:text-ink-400')}>
-          {extension} · {formatBytes(attachment.size_bytes, lang)}
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              'block truncate text-sm font-semibold',
+              own ? 'text-white' : 'text-ink-800 dark:text-ink-100',
+            )}
+          >
+            {attachment.file_name}
+          </span>
+          <span className={cn('block text-[11px]', own ? 'text-white/80' : 'text-ink-500 dark:text-ink-400')}>
+            {extension} · {formatBytes(attachment.size_bytes, lang)}
+          </span>
         </span>
-      </span>
-      <Download className={cn('h-4 w-4 shrink-0', own ? 'text-white/80' : 'text-ink-400')} aria-label={t('download')} />
-    </a>
+        <Info
+          className={cn('h-4 w-4 shrink-0', own ? 'text-white/80' : 'text-ink-400')}
+          aria-label={t('file_preview')}
+        />
+      </button>
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t('file_preview')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              {t('cancel')}
+            </Button>
+            {attachment.url && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(attachment.url as string, '_blank', 'noopener,noreferrer')}
+              >
+                {t('file_open')}
+              </Button>
+            )}
+            {attachment.url && (
+              <Button onClick={() => void download()} loading={downloading} icon={<Download className="h-4 w-4" />}>
+                {t('download')}
+              </Button>
+            )}
+          </>
+        }
+      >
+        <div className="flex flex-col items-center gap-2 py-2 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300">
+            <FileText className="h-8 w-8" />
+          </span>
+          <p className="mt-1 break-all text-sm font-bold text-ink-800 dark:text-ink-100">{attachment.file_name}</p>
+          <p className="text-xs text-ink-500 dark:text-ink-400">
+            {extension} · {formatBytes(attachment.size_bytes, lang)}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-ink-400">{t('file_download_hint')}</p>
+        </div>
+      </Modal>
+    </>
   )
 }

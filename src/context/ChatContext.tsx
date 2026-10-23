@@ -32,6 +32,7 @@ interface ChatContextValue {
   activeConversation: ChatConversation | null
   activeMessages: ChatMessage[]
   messagesLoading: boolean
+  messagesError: string | null
   hasMore: boolean
   typingUsers: PublicProfile[]
   onlineUsers: Record<string, boolean>
@@ -46,9 +47,21 @@ interface ChatContextValue {
   sendText: (text: string, options?: { replyTo?: string | null }) => Promise<void>
   sendFiles: (
     files: File[],
-    options?: { replyTo?: string | null; caption?: string | null; onProgress?: (p: number) => void },
+    options?: {
+      replyTo?: string | null
+      caption?: string | null
+      metadata?: Record<string, unknown>
+      onProgress?: (p: number) => void
+    },
   ) => Promise<void>
   sendVoice: (blob: Blob, durationSeconds: number, options?: { replyTo?: string | null }) => Promise<void>
+  sendSticker: (
+    sticker:
+      | { kind: 'builtin'; id: string }
+      | { kind: 'library'; id: string; name: string; url: string; path?: string },
+    options?: { replyTo?: string | null },
+  ) => Promise<void>
+  retryMessage: (message: ChatMessage) => Promise<void>
   forwardMessage: (message: ChatMessage, targetConversationIds: string[]) => Promise<void>
   editMessage: (messageId: string, body: string) => Promise<void>
   deleteMessage: (messageId: string, forEveryone: boolean) => Promise<void>
@@ -89,6 +102,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messagesByConv, setMessagesByConv] = useState<Record<string, ChatMessage[]>>({})
   const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messagesError, setMessagesError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState<Record<string, boolean>>({})
   const [typingByConv, setTypingByConv] = useState<Record<string, Record<string, number>>>({})
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({})
@@ -194,6 +208,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!targetId || !user) return
       const conversation = conversationsRef.current.find((c) => c.id === targetId)
       setMessagesLoading(true)
+      setMessagesError(null)
       try {
         const page = await api.listMessages(targetId, {
           clearedAt: conversation?.membership.cleared_at ?? null,
@@ -219,11 +234,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (needsSigning.length) void resolveAttachmentUrls(targetId, needsSigning)
       } catch (error) {
         if (import.meta.env.DEV) console.warn('[wasel] messages', error)
+        setMessagesError(t('messages_load_failed'))
       } finally {
         setMessagesLoading(false)
       }
     },
-    [user, resolveAttachmentUrls],
+    [user, resolveAttachmentUrls, t],
   )
 
   const loadMore = useCallback(async () => {
@@ -268,6 +284,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (conversationId: string | null) => {
       setActiveId(conversationId)
       activeIdRef.current = conversationId
+      setMessagesError(null)
       if (!conversationId || !user) return
 
       if (!messagesByConv[conversationId]) {
@@ -299,6 +316,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  /**
+   * حماية من الإرسال المزدوج: نفس المحتوى في نفس المحادثة خلال أقل من ثانية
+   * يُعتبر تكراراً غير مقصود (نقرتان سريعتان أو Enter + نقر).
+   */
+  const recentSendsRef = useRef<Map<string, number>>(new Map())
+  const isDuplicateSend = useCallback((key: string) => {
+    const now = Date.now()
+    const map = recentSendsRef.current
+    for (const [entry, at] of map) {
+      if (now - at > 5000) map.delete(entry)
+    }
+    const last = map.get(key)
+    if (last && now - last < 900) return true
+    map.set(key, now)
+    return false
+  }, [])
+
   const replaceOptimistic = useCallback((conversationId: string, clientId: string, saved: ChatMessage) => {
     setMessagesByConv((prev) => ({
       ...prev,
@@ -320,6 +354,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const conversationId = activeIdRef.current
       const body = text.trim()
       if (!conversationId || !user || !body) return
+      if (isDuplicateSend(`${conversationId}:text:${options?.replyTo ?? ''}:${body}`)) return
 
       const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
       appendOptimistic({
@@ -355,19 +390,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         toast.error(t(errorKey(error)))
       }
     },
-    [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, toast, t],
+    [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, toast, t, isDuplicateSend],
   )
 
   const sendFiles = useCallback(
     async (
       files: File[],
-      options?: { replyTo?: string | null; caption?: string | null; onProgress?: (p: number) => void },
+      options?: {
+        replyTo?: string | null
+        caption?: string | null
+        metadata?: Record<string, unknown>
+        onProgress?: (p: number) => void
+      },
     ) => {
       const conversationId = activeIdRef.current
       if (!conversationId || !user || !files.length) return
 
       for (const file of files) {
         const kind = mediaKindFromMime(file.type || 'application/octet-stream')
+        const dedupeKey = `${conversationId}:file:${file.name}:${file.size}:${file.lastModified}`
+        if (isDuplicateSend(dedupeKey)) continue
+        const metadata = options?.metadata ?? {}
         const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
         const localUrl = kind === 'image' || kind === 'video' || kind === 'audio' ? URL.createObjectURL(file) : null
 
@@ -380,7 +423,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           reply_to: options?.replyTo ?? null,
           forwarded_from: null,
           status: 'sent',
-          metadata: {},
+          metadata,
           edited_at: null,
           deleted_at: null,
           created_at: new Date().toISOString(),
@@ -408,6 +451,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           pending: true,
           clientId,
           localFilePreview: localUrl,
+          localFiles: [file],
         })
 
         try {
@@ -417,6 +461,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             type: kind,
             body: options?.caption ?? null,
             replyTo: options?.replyTo ?? null,
+            metadata,
             files: [file],
             onProgress: (percent) => {
               options?.onProgress?.(percent)
@@ -442,7 +487,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, resolveAttachmentUrls, toast, t],
+    [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, resolveAttachmentUrls, toast, t, isDuplicateSend],
   )
 
   const sendVoice = useCallback(
@@ -489,6 +534,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         reactions: [],
         pending: true,
         clientId,
+        localFiles: [file],
       })
 
       try {
@@ -512,6 +558,122 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     },
     [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, resolveAttachmentUrls, toast, t],
+  )
+
+  const sendSticker = useCallback(
+    async (
+      sticker:
+        | { kind: 'builtin'; id: string }
+        | { kind: 'library'; id: string; name: string; url: string; path?: string },
+      options?: { replyTo?: string | null },
+    ) => {
+      const conversationId = activeIdRef.current
+      if (!conversationId || !user) return
+
+      if (sticker.kind === 'builtin') {
+        const metadata: Record<string, unknown> = {
+          sticker: true,
+          sticker_kind: 'builtin',
+          sticker_id: sticker.id,
+        }
+        const clientId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        appendOptimistic({
+          id: clientId,
+          conversation_id: conversationId,
+          sender_id: user.id,
+          type: 'image',
+          body: null,
+          reply_to: options?.replyTo ?? null,
+          forwarded_from: null,
+          status: 'sent',
+          metadata,
+          edited_at: null,
+          deleted_at: null,
+          created_at: new Date().toISOString(),
+          attachments: [],
+          reactions: [],
+          pending: true,
+          clientId,
+        })
+        try {
+          const saved = await api.sendMessage({
+            conversationId,
+            senderId: user.id,
+            type: 'image',
+            replyTo: options?.replyTo ?? null,
+            metadata,
+          })
+          replaceOptimistic(conversationId, clientId, { ...saved, attachments: [], reactions: [] })
+        } catch (error) {
+          markOptimisticFailed(conversationId, clientId)
+          toast.error(t(errorKey(error)))
+        }
+        return
+      }
+
+      // ملصق من مكتبة المستخدم: نجلبه ثم نرفع نسخة إلى تخزين المحادثة
+      // حتى يبقى ظاهراً للطرف الآخر حتى لو حُذف من المكتبة لاحقاً.
+      try {
+        let response = await fetch(sticker.url, { mode: 'cors', credentials: 'omit' }).catch(() => null)
+        if ((!response || !response.ok) && sticker.path) {
+          const fresh = await api.getSignedUrl(BUCKETS.stickers, sticker.path, 300)
+          if (fresh) response = await fetch(fresh, { mode: 'cors', credentials: 'omit' })
+        }
+        if (!response || !response.ok) throw new Error('STICKER_FETCH_FAILED')
+        const blob = await response.blob()
+        const type = blob.type || 'image/png'
+        const ext = type.includes('webp') ? 'webp' : type.includes('jpeg') ? 'jpg' : 'png'
+        const file = new File([blob], `${sticker.name || 'sticker'}.${ext}`, { type })
+        await sendFiles([file], {
+          replyTo: options?.replyTo ?? null,
+          metadata: { sticker: true, sticker_kind: 'library', sticker_id: sticker.id },
+        })
+      } catch (error) {
+        if (import.meta.env.DEV) console.warn('[wasel] sticker', error)
+        toast.error(t('sticker_send_failed'))
+      }
+    },
+    [user, appendOptimistic, replaceOptimistic, markOptimisticFailed, sendFiles, toast, t],
+  )
+
+  const removeOptimistic = useCallback((conversationId: string, clientId?: string) => {
+    if (!clientId) return
+    setMessagesByConv((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] ?? []).filter((message) => message.clientId !== clientId),
+    }))
+  }, [])
+
+  const retryMessage = useCallback(
+    async (message: ChatMessage) => {
+      if (!message.failed) return
+      // نسمح بإعادة الإرسال فوراً حتى لو كانت المحاولة الفاشلة قبل أقل من ثانية
+      recentSendsRef.current.clear()
+      removeOptimistic(message.conversation_id, message.clientId)
+      const metadata = message.metadata ?? {}
+      if (
+        metadata.sticker === true &&
+        metadata.sticker_kind === 'builtin' &&
+        typeof metadata.sticker_id === 'string'
+      ) {
+        await sendSticker({ kind: 'builtin', id: metadata.sticker_id }, { replyTo: message.reply_to })
+        return
+      }
+      if (message.localFiles?.length) {
+        await sendFiles(message.localFiles, {
+          replyTo: message.reply_to,
+          caption: message.body,
+          metadata,
+        })
+        return
+      }
+      if (message.type === 'text' && message.body) {
+        await sendText(message.body, { replyTo: message.reply_to })
+        return
+      }
+      toast.info(t('retry_unavailable'))
+    },
+    [removeOptimistic, sendSticker, sendFiles, sendText, toast, t],
   )
 
   const forwardMessage = useCallback(
@@ -1111,6 +1273,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       activeConversation,
       activeMessages: activeId ? messagesByConv[activeId] ?? [] : [],
       messagesLoading,
+      messagesError,
       hasMore: activeId ? hasMore[activeId] ?? false : false,
       typingUsers,
       onlineUsers,
@@ -1125,6 +1288,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sendText,
       sendFiles,
       sendVoice,
+      sendSticker,
+      retryMessage,
       forwardMessage,
       editMessage,
       deleteMessage,
@@ -1153,6 +1318,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       activeConversation,
       messagesByConv,
       messagesLoading,
+      messagesError,
       hasMore,
       typingUsers,
       onlineUsers,
@@ -1167,6 +1333,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sendText,
       sendFiles,
       sendVoice,
+      sendSticker,
+      retryMessage,
       forwardMessage,
       editMessage,
       deleteMessage,
@@ -1211,6 +1379,13 @@ async function notifyBrowser(title: string, body: string, conversationId: string
     if (!('Notification' in window) || Notification.permission !== 'granted') return
     if (document.visibilityState === 'visible') return
     const registration = await navigator.serviceWorker?.getRegistration()
+    // عند وجود اشتراك Web Push يتولّى Service Worker العرض (حتى لا يتكرر الإشعار)
+    if (registration) {
+      const subscription = registration.pushManager
+        ? await registration.pushManager.getSubscription().catch(() => null)
+        : null
+      if (subscription) return
+    }
     if (registration) {
       await registration.showNotification(title, {
         body,

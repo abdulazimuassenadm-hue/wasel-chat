@@ -12,7 +12,10 @@
     "cap:sync": "npm run build && cap sync",
     "cap:copy": "npm run build && cap copy",
     "cap:open": "cap open android",
-    "cap:run": "cap run android"
+    "cap:run": "cap run android",
+    "verify:sw": "node scripts/verify-sw.mjs",
+    "verify:turn": "node scripts/verify-turn.mjs",
+    "verify": "npm run typecheck && npm run verify:sw && npm run verify:turn"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

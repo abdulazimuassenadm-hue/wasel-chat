@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDown, ChevronLeft, Info, MessageSquare, Phone, Search, Video } from 'lucide-react'
+import { AlertCircle, ArrowDown, ChevronLeft, Info, MessageSquare, Phone, Search, Video } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { useChat } from '@/context/ChatContext'
@@ -40,11 +40,13 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
   const [showJump, setShowJump] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [replyCache, setReplyCache] = useState<Record<string, ChatMessage>>({})
+  const [highlightId, setHighlightId] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const atBottomRef = useRef(true)
   const prevCountRef = useRef(0)
+  const highlightTimerRef = useRef<number | null>(null)
 
   const currentUserId = user?.id ?? ''
 
@@ -126,6 +128,45 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
     atBottomRef.current = true
     setShowJump(false)
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
+    }
+  }, [])
+
+  const nameOf = useCallback(
+    (userId: string | null | undefined) => {
+      if (!userId) return t('user')
+      if (userId === currentUserId) return t('you')
+      return participants[userId]?.display_name ?? t('user')
+    },
+    [participants, currentUserId, t],
+  )
+
+  /** الانتقال إلى الرسالة الأصلية عند الضغط على مقتطف الرد */
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      if (!messageId) return
+      const element = document.getElementById(`message-${messageId}`)
+      if (!element) {
+        toast.info(t('original_message_missing'))
+        return
+      }
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightId(messageId)
+      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
+      highlightTimerRef.current = window.setTimeout(() => setHighlightId(null), 1900)
+    },
+    [toast, t],
+  )
+
+  /** بعد الإرسال: ننزل إلى أحدث رسالة ونلغي سياق الرد */
+  const afterSend = useCallback(() => {
+    setReplyTo(null)
+    atBottomRef.current = true
+    window.setTimeout(() => scrollToBottom('smooth'), 80)
+  }, [scrollToBottom])
 
   useEffect(() => {
     const grew = resolvedMessages.length > prevCountRef.current
@@ -264,10 +305,11 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
 
       <ChatSearchPanel open={searchOpen} onClose={() => setSearchOpen(false)} messages={resolvedMessages} />
 
-      <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-4">
+      <div ref={scrollRef} onScroll={onScroll} className="chat-canvas relative min-h-0 flex-1 overflow-y-auto px-1.5 py-3 pb-6 sm:px-4">
         {chat.messagesLoading && !messages.length && (
-          <div className="flex justify-center py-10">
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-xs font-semibold text-ink-500 dark:text-ink-400">
             <Spinner size={26} />
+            <span>{t('loading_messages')}</span>
           </div>
         )}
 
@@ -330,6 +372,9 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                         recipientCount={recipientCount}
                         sender={message.sender_id ? participants[message.sender_id] ?? null : null}
                         currentUserId={currentUserId}
+                        nameOf={nameOf}
+                        highlighted={highlightId === message.id}
+                        onJumpToMessage={jumpToMessage}
                         onReply={(target) => {
                           setEditing(null)
                           setReplyTo(target)
@@ -344,6 +389,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
                         onReact={(target, emoji) => void chat.reactToMessage(target.id, emoji)}
                         onOpenMedia={(url, name) => setLightbox({ url, name })}
                         onInfo={(target) => setInfoMessage(target)}
+                        onRetry={(target) => void chat.retryMessage(target)}
                       />
                     </div>
                   </div>
@@ -368,6 +414,20 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         )}
       </div>
 
+      {chat.messagesError && (
+        <div className="flex shrink-0 items-center gap-2 border-t border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">{chat.messagesError}</span>
+          <button
+            type="button"
+            onClick={() => void chat.refreshMessages(conversation.id)}
+            className="shrink-0 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white"
+          >
+            {t('retry')}
+          </button>
+        </div>
+      )}
+
       <MessageComposer
         conversationId={conversation.id}
         replyTo={replyTo}
@@ -380,7 +440,7 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         onCancelEdit={() => setEditing(null)}
         onSubmitText={(text) => {
           void chat.sendText(text, { replyTo: replyTo?.id ?? null })
-          setReplyTo(null)
+          afterSend()
         }}
         onSubmitEdit={(text) => {
           if (editing) void chat.editMessage(editing.id, text)
@@ -388,11 +448,25 @@ export function ChatWindow({ conversationId }: { conversationId: string | null }
         }}
         onSendFiles={(files) => {
           void chat.sendFiles(files, { replyTo: replyTo?.id ?? null })
-          setReplyTo(null)
+          afterSend()
         }}
         onSendVoice={(blob, duration) => {
           void chat.sendVoice(blob, duration, { replyTo: replyTo?.id ?? null })
-          setReplyTo(null)
+          afterSend()
+        }}
+        onSendBuiltinSticker={(id) => {
+          const pending = chat.sendSticker({ kind: 'builtin', id }, { replyTo: replyTo?.id ?? null })
+          afterSend()
+          return pending
+        }}
+        onSendLibrarySticker={(sticker) => {
+          if (!sticker.url) return Promise.resolve()
+          const pending = chat.sendSticker(
+            { kind: 'library', id: sticker.id, name: sticker.name, url: sticker.url, path: sticker.path },
+            { replyTo: replyTo?.id ?? null },
+          )
+          afterSend()
+          return pending
         }}
         onTyping={(typingNow) => chat.setTyping(conversation.id, typingNow)}
       />

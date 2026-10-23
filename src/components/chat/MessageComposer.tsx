@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, FileText, Image as ImageIcon, Mic, Paperclip, Send, Smile, Trash2, X, Video } from 'lucide-react'
+import { Camera, FileText, Image as ImageIcon, Mic, Paperclip, Send, Smile, Sticker, Trash2, X, Video } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { EmojiPicker } from '@/components/ui/EmojiPicker'
 import { IconButton } from '@/components/ui/Button'
 import { useToast } from '@/context/ToastContext'
 import { isAllowedFile, UPLOAD_LIMITS } from '@/lib/supabase'
 import { cn, formatDuration } from '@/lib/utils'
-import type { ChatMessage } from '@/types'
+import type { ChatMessage, UserSticker } from '@/types'
+import { StickerPicker } from './StickerPicker'
 
 interface MessageComposerProps {
   conversationId: string
@@ -20,6 +21,8 @@ interface MessageComposerProps {
   onSubmitEdit: (text: string) => void
   onSendFiles: (files: File[]) => void
   onSendVoice: (blob: Blob, duration: number) => void
+  onSendBuiltinSticker: (id: string) => Promise<void> | void
+  onSendLibrarySticker: (sticker: UserSticker) => Promise<void> | void
   onTyping: (typing: boolean) => void
   participants: Record<string, { display_name: string }>
   currentUserId: string
@@ -37,6 +40,8 @@ export function MessageComposer({
   onSubmitEdit,
   onSendFiles,
   onSendVoice,
+  onSendBuiltinSticker,
+  onSendLibrarySticker,
   onTyping,
   participants,
   currentUserId,
@@ -46,6 +51,7 @@ export function MessageComposer({
   const [text, setText] = useState('')
   const [showEmoji, setShowEmoji] = useState(false)
   const [showAttach, setShowAttach] = useState(false)
+  const [showStickers, setShowStickers] = useState(false)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -59,6 +65,9 @@ export function MessageComposer({
   const timerRef = useRef<number | null>(null)
   const typingRef = useRef(false)
   const typingTimeoutRef = useRef<number | null>(null)
+  const recordSecondsRef = useRef(0)
+  // يمنع إرسال الرسالة مرتين عند الضغط المتكرر السريع قبل إعادة الرسم
+  const submitLockRef = useRef(0)
 
   // إعادة تعيين الحالة عند تغيير المحادثة
   useEffect(() => {
@@ -66,6 +75,7 @@ export function MessageComposer({
     setPendingFiles([])
     setShowAttach(false)
     setShowEmoji(false)
+    setShowStickers(false)
   }, [conversationId])
 
   // عند بدء التعديل نعرض النص الحالي
@@ -102,15 +112,19 @@ export function MessageComposer({
   }
 
   const submit = () => {
+    const now = Date.now()
+    if (now - submitLockRef.current < 700) return
     const value = text.trim()
     if (editing) {
       if (!value) return
+      submitLockRef.current = now
       onSubmitEdit(value)
       setText('')
       onCancelEdit()
       return
     }
     if (pendingFiles.length) {
+      submitLockRef.current = now
       onSendFiles(pendingFiles)
       setPendingFiles([])
       if (value) {
@@ -121,6 +135,7 @@ export function MessageComposer({
       return
     }
     if (!value) return
+    submitLockRef.current = now
     onSubmitText(value)
     setText('')
     if (typingRef.current) {
@@ -171,16 +186,22 @@ export function MessageComposer({
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop())
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
-        const seconds = recordSeconds
+        // نقرأ المدة من ref لأن الحالة داخل هذا الإغلاق تبقى بقيمتها الأولى (0)
+        const seconds = recordSecondsRef.current
         setRecording(false)
         setRecordSeconds(0)
+        recordSecondsRef.current = 0
         if (blob.size > 0 && seconds >= 1) onSendVoice(blob, seconds)
       }
 
       recorder.start()
       setRecording(true)
       setRecordSeconds(0)
-      timerRef.current = window.setInterval(() => setRecordSeconds((value) => value + 1), 1000)
+      recordSecondsRef.current = 0
+      timerRef.current = window.setInterval(() => {
+        recordSecondsRef.current += 1
+        setRecordSeconds(recordSecondsRef.current)
+      }, 1000)
     } catch {
       toast.error(t('call_denied_permission'))
     }
@@ -194,6 +215,7 @@ export function MessageComposer({
         recorder.stream.getTracks().forEach((track) => track.stop())
         setRecording(false)
         setRecordSeconds(0)
+        recordSecondsRef.current = 0
       }
     }
     if (timerRef.current) window.clearInterval(timerRef.current)
@@ -222,14 +244,21 @@ export function MessageComposer({
   }
 
   return (
-    <div className="relative border-t border-ink-200/80 bg-white px-1.5 py-1.5 safe-bottom dark:border-ink-800 dark:bg-ink-900 sm:px-4 sm:py-2">
+    <div className="relative shrink-0 border-t border-ink-200/80 bg-white px-1.5 py-1.5 safe-bottom dark:border-ink-800 dark:bg-ink-900 sm:px-4 sm:py-2">
       {/* شريط الرد */}
       {replyTo && !editing && (
         <div className="mx-1 mb-2 flex items-center gap-2 rounded-xl border-s-4 border-brand-500 bg-ink-50 px-3 py-2 dark:bg-ink-800/70">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-brand-700 dark:text-brand-300">{t('reply')} · {replyLabel}</p>
             <p className="truncate text-xs text-ink-500 dark:text-ink-400">
-              {replyTo.body ?? (replyTo.type === 'image' ? t('photo') : replyTo.type === 'audio' ? t('voice_message') : t('document'))}
+              {replyTo.metadata?.sticker === true
+                ? t('sticker')
+                : replyTo.body ??
+                  (replyTo.type === 'image'
+                    ? t('photo')
+                    : replyTo.type === 'audio'
+                      ? t('voice_message')
+                      : t('document'))}
             </p>
           </div>
           <IconButton label={t('cancel')} size="sm" onClick={onCancelReply}>
@@ -282,6 +311,15 @@ export function MessageComposer({
         </div>
       )}
 
+      {/* لوحة الملصقات */}
+      <StickerPicker
+        open={showStickers}
+        userId={currentUserId}
+        onClose={() => setShowStickers(false)}
+        onSendBuiltin={onSendBuiltinSticker}
+        onSendLibrary={onSendLibrarySticker}
+      />
+
       {recording ? (
         <div className="flex items-center gap-2 rounded-2xl bg-rose-50 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 dark:bg-rose-950/40">
           <span className="flex h-3 w-3 shrink-0 animate-pulse rounded-full bg-rose-500" />
@@ -309,14 +347,30 @@ export function MessageComposer({
                 })
               }}
             />
-            <IconButton label={t('emoji')} className="max-sm:h-9 max-sm:w-9" onClick={() => setShowEmoji((value) => !value)}>
+            <IconButton
+              label={t('emoji')}
+              className="max-sm:h-9 max-sm:w-9"
+              onClick={() => {
+                setShowStickers(false)
+                setShowAttach(false)
+                setShowEmoji((value) => !value)
+              }}
+            >
               <Smile className="h-5 w-5" />
             </IconButton>
           </div>
 
           {/* المرفقات */}
           <div className="relative">
-            <IconButton label={t('attach_file')} className="max-sm:h-9 max-sm:w-9" onClick={() => setShowAttach((value) => !value)}>
+            <IconButton
+              label={t('attach_file')}
+              className="max-sm:h-9 max-sm:w-9"
+              onClick={() => {
+                setShowStickers(false)
+                setShowEmoji(false)
+                setShowAttach((value) => !value)
+              }}
+            >
               <Paperclip className={cn('h-5 w-5 transition', showAttach && 'rotate-45')} />
             </IconButton>
             {showAttach && (
@@ -354,6 +408,19 @@ export function MessageComposer({
               </div>
             )}
           </div>
+
+          {/* الملصقات */}
+          <IconButton
+            label={t('stickers')}
+            className={cn('max-sm:h-9 max-sm:w-9', showStickers && 'bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-300')}
+            onClick={() => {
+              setShowEmoji(false)
+              setShowAttach(false)
+              setShowStickers((value) => !value)
+            }}
+          >
+            <Sticker className="h-5 w-5" />
+          </IconButton>
 
           {/* حقل النص */}
           <textarea

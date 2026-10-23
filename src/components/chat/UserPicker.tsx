@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Search, UserPlus, Check, Mail } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, UserPlus, Check, Mail, Phone, X } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { Avatar } from '@/components/ui/Avatar'
 import { Spinner } from '@/components/ui/Misc'
 import * as api from '@/lib/api'
 import { cn, isValidEmail } from '@/lib/utils'
+import { isMissingPhoneSearchRpc, isPhoneLike } from '@/lib/phone'
 import type { PublicProfile } from '@/types'
 
 interface UserPickerListProps {
@@ -16,6 +17,9 @@ interface UserPickerListProps {
   onToggle?: (profile: PublicProfile) => void
   onlineUsers?: Record<string, boolean>
   emptyHint?: string
+  /** نص ابتدائي (يُستخدم عند فتح البحث من شاشة المحادثات) */
+  initialTerm?: string
+  autoFocus?: boolean
 }
 
 export function UserPickerList({
@@ -26,14 +30,29 @@ export function UserPickerList({
   onToggle,
   onlineUsers = {},
   emptyHint,
+  initialTerm,
+  autoFocus,
 }: UserPickerListProps) {
   const { t } = useApp()
   const { user } = useAuth()
-  const [term, setTerm] = useState('')
+  const [term, setTerm] = useState(initialTerm ?? '')
   const [results, setResults] = useState<PublicProfile[]>([])
   const [contacts, setContacts] = useState<PublicProfile[]>([])
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [phoneUnavailable, setPhoneUnavailable] = useState(false)
+
+  // نثبّت المفتاح حتى لا تتغيّر هوية الدالة مع كل رسم (ويمنع تكرار البحث)
+  const excludedKey = excludedIds.join('|')
+  const excludedSet = useMemo(
+    () => new Set(excludedKey ? excludedKey.split('|') : []),
+    [excludedKey],
+  )
+
+  useEffect(() => {
+    if (initialTerm === undefined) return
+    setTerm((current) => (current === initialTerm ? current : initialTerm))
+  }, [initialTerm])
 
   // جهات الاتصال كمصدر سريع
   useEffect(() => {
@@ -52,23 +71,45 @@ export function UserPickerList({
       const clean = value.trim()
       if (clean.length < 2) {
         setResults([])
+        setPhoneUnavailable(false)
         return
       }
       setSearching(true)
+      setPhoneUnavailable(false)
       try {
-        const found = await api.searchUsers(clean, user.id)
-        if (isValidEmail(clean)) {
-          const byEmail = await api.findByEmail(clean)
-          if (byEmail && !found.some((p) => p.id === byEmail.id)) found.unshift(byEmail)
+        const phoneQuery = isPhoneLike(clean)
+        const [byName, byPhone] = await Promise.all([
+          api.searchUsers(clean, user.id).catch(() => [] as PublicProfile[]),
+          phoneQuery
+            ? api.searchUserByPhone(clean).catch((error) => {
+                if (isMissingPhoneSearchRpc(error)) setPhoneUnavailable(true)
+                return [] as PublicProfile[]
+              })
+            : Promise.resolve([] as PublicProfile[]),
+        ])
+
+        const merged: PublicProfile[] = []
+        const seen = new Set<string>()
+        // نتائج الهاتف أولاً لأنها الأدق عند كتابة رقم
+        for (const profile of [...byPhone, ...byName]) {
+          if (!profile?.id || seen.has(profile.id)) continue
+          seen.add(profile.id)
+          merged.push(profile)
         }
-        setResults(found.filter((p) => !excludedIds.includes(p.id)))
+
+        if (isValidEmail(clean)) {
+          const byEmail = await api.findByEmail(clean).catch(() => null)
+          if (byEmail && !seen.has(byEmail.id)) merged.unshift(byEmail)
+        }
+
+        setResults(merged.filter((profile) => !excludedSet.has(profile.id)))
       } catch {
         setResults([])
       } finally {
         setSearching(false)
       }
     },
-    [user, excludedIds],
+    [user, excludedSet],
   )
 
   useEffect(() => {
@@ -133,9 +174,30 @@ export function UserPickerList({
             value={term}
             onChange={(event) => setTerm(event.target.value)}
             placeholder={t('search_users')}
-            className="wasel-input ps-10"
+            className="wasel-input ps-10 pe-10"
+            autoFocus={autoFocus}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            inputMode={isPhoneLike(term) ? 'tel' : 'text'}
+            aria-label={t('search_users')}
           />
+          {term && (
+            <button
+              type="button"
+              onClick={() => setTerm('')}
+              className="absolute inset-y-0 end-2 my-auto flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition hover:bg-ink-100 dark:hover:bg-ink-800"
+              aria-label={t('clear')}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+        {phoneUnavailable && (
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {t('phone_search_unavailable')}
+          </p>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -146,7 +208,10 @@ export function UserPickerList({
         )}
 
         {!searching && term.trim().length >= 2 && results.length === 0 && (
-          <p className="px-4 py-6 text-center text-sm text-ink-500 dark:text-ink-400">{t('no_results')}</p>
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-ink-600 dark:text-ink-300">{t('no_results')}</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-400">{t('search_no_results_hint')}</p>
+          </div>
         )}
 
         {results.length > 0 && (
@@ -167,8 +232,10 @@ export function UserPickerList({
 
         {term.trim().length < 2 && contactProfiles.length === 0 && (
           <div className="px-4 py-8 text-center">
-            <Mail className="mx-auto mb-3 h-8 w-8 text-ink-300" />
-            <p className="text-sm text-ink-500 dark:text-ink-400">{t('search_users')}</p>
+            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-300">
+              <Phone className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-semibold text-ink-600 dark:text-ink-300">{t('search_users')}</p>
             {emptyHint && <p className="mt-1 text-xs text-ink-400">{emptyHint}</p>}
           </div>
         )}

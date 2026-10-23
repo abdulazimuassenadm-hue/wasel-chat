@@ -46,6 +46,7 @@ export const BUCKETS = {
   groupAvatars: 'group-avatars',
   chatMedia: 'chat-media',
   statusMedia: 'status-media',
+  stickers: 'stickers',
 } as const
 
 /** حدود الرفع (بالميجابايت) */
@@ -53,6 +54,7 @@ export const UPLOAD_LIMITS = {
   avatar: 5,
   chatMedia: 25,
   statusMedia: 25,
+  sticker: 3,
 }
 
 /** أنواع الملفات المسموح بها */
@@ -93,23 +95,9 @@ export function mediaKindFromMime(mime: string): 'image' | 'video' | 'audio' | '
   return 'file'
 }
 
-/** إعدادات WebRTC (STUN/TURN) */
-export function getIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = []
-  const stun = import.meta.env.VITE_STUN_URL || 'stun:stun.l.google.com:19302'
-  if (stun) servers.push({ urls: stun.split(',').map((s) => s.trim()).filter(Boolean) })
-
-  const turnUrl = import.meta.env.VITE_TURN_URL
-  if (turnUrl) {
-    servers.push({
-      urls: turnUrl.split(',').map((s) => s.trim()).filter(Boolean),
-      username: import.meta.env.VITE_TURN_USERNAME,
-      credential: import.meta.env.VITE_TURN_CREDENTIAL,
-    })
-  }
-  return servers
-}
-
-export const hasTurnServer = Boolean(import.meta.env.VITE_TURN_URL)
+/**
+ * إعدادات WebRTC انتقلت إلى src/lib/webrtc.ts لأن بيانات TURN تُجلب وقت التشغيل
+ * من Edge Function ولا يجوز حزم أسرارها في ملفات JavaScript العامة.
+ */
 
 export const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || ''

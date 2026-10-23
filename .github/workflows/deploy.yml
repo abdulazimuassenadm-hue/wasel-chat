@@ -8,6 +8,7 @@
 # متغيرات المستودع المطلوبة (Settings → Secrets and variables → Actions → Variables):
 #   VITE_SUPABASE_URL       : رابط مشروع Supabase
 #   VITE_SUPABASE_ANON_KEY  : المفتاح العام (anon / publishable) — ليس سراً
+#   VITE_VAPID_PUBLIC_KEY   : المفتاح العام لإشعارات Web Push — اختياري وليس سراً
 #
 # ملاحظة: يُمرَّر VITE_BASE_PATH=/wasel-chat/ في خطوة البناء (انظر env أدناه)
 #         ليطابق مسار المستودع على GitHub Pages. محلياً وداخل Capacitor يبقى
@@ -51,6 +52,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # المفتاح العام VAPID (ليس سراً). اتركه فارغاً لتعطيل إشعارات الخلفية.
+          VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY }}
           # مسار الأساس = اسم المستودع (موقع GitHub Pages على مسار فرعي)
           VITE_BASE_PATH: /wasel-chat/
         run: |

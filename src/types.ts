@@ -27,6 +27,8 @@ export interface NotificationSettings {
   browser: boolean
   preview: boolean
   reactions: boolean
+  /** إشعارات المكالمات الواردة (اختياري للتوافق مع الحسابات القديمة) */
+  calls?: boolean
 }
 
 /** بيانات خاصة — لا يراها إلا صاحب الحساب (أو مدير المنصة) */
@@ -158,7 +160,21 @@ export interface ChatMessage {
   pending?: boolean
   failed?: boolean
   localFilePreview?: string | null
+  /** ملفات أصلية محفوظة محلياً فقط — تُستخدم لإعادة المحاولة دون فقدان المحتوى */
+  localFiles?: File[]
   clientId?: string
+}
+
+/** ملصق محفوظ في مكتبة المستخدم (جدول user_stickers) */
+export interface UserSticker {
+  id: string
+  user_id: string
+  name: string
+  bucket: string
+  path: string
+  created_at: string
+  /** رابط موقّع مؤقت للعرض */
+  url?: string | null
 }
 
 export interface Contact {

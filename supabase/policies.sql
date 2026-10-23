@@ -25,6 +25,7 @@ alter table public.notifications         enable row level security;
 alter table public.reports               enable row level security;
 alter table public.user_blocks           enable row level security;
 alter table public.push_subscriptions    enable row level security;
+alter table public.push_deliveries      enable row level security;
 alter table public.app_settings          enable row level security;
 
 -- ============================================================================
@@ -626,4 +627,6 @@ grant select, insert, update, delete on public.notifications to authenticated;
 grant select, insert, update on public.reports to authenticated;
 grant select, insert, delete on public.user_blocks to authenticated;
 grant select, insert, delete on public.push_subscriptions to authenticated;
+-- push_deliveries خادم فقط: لا منح لأي دور عام (service_role يتجاوز RLS)
+revoke all on public.push_deliveries from anon, authenticated;
 grant select, update, insert on public.app_settings to authenticated;
