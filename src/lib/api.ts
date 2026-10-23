@@ -1,4 +1,5 @@
-import { supabase, BUCKETS, mediaKindFromMime, SUPABASE_URL } from './supabase'
+import { supabase, BUCKETS, UPLOAD_LIMITS, mediaKindFromMime, SUPABASE_URL } from './supabase'
+import { compressImageFile } from './media'
 import { errorKey, sanitizeFileName } from './utils'
 import type {
   AdminStats,
@@ -235,7 +236,11 @@ export async function createUserSticker(userId: string, blob: Blob, name: string
     .insert({ user_id: userId, name: label, bucket: BUCKETS.stickers, path })
     .select('*')
     .single()
-  const row = unwrap<UserSticker>(result, 'createUserSticker')
+  if (result.error) {
+    await supabase.storage.from(BUCKETS.stickers).remove([path]).catch(() => undefined)
+    throw result.error
+  }
+  const row = result.data as UserSticker
   const url = await getSignedUrl(BUCKETS.stickers, path, 3600)
   return { ...row, url }
 }
@@ -798,19 +803,52 @@ export async function createStatus(input: {
   file?: File | null
   onProgress?: (percent: number) => void
 }): Promise<Status> {
+  const content = input.type === 'text' ? (input.content ?? '').trim().slice(0, 300) : null
+  if (input.type === 'text' && !content) throw new Error('STATUS_CONTENT_REQUIRED')
+  if (input.type !== 'text' && !input.file) throw new Error('STATUS_MEDIA_REQUIRED')
+
+  let source = input.type === 'text' ? null : input.file ?? null
+  if (source) {
+    if (input.type === 'image' && !source.type.startsWith('image/')) {
+      throw new Error('STATUS_MEDIA_TYPE_MISMATCH')
+    }
+    if (input.type === 'video' && !source.type.startsWith('video/')) {
+      throw new Error('STATUS_MEDIA_TYPE_MISMATCH')
+    }
+    if (source.size > UPLOAD_LIMITS.statusMedia * 1024 * 1024) {
+      throw new Error('FILE_TOO_LARGE')
+    }
+    if (input.type === 'image') {
+      input.onProgress?.(5)
+      source = await compressImageFile(source, {
+        maxDimension: 1600,
+        maxBytes: 8 * 1024 * 1024,
+        quality: 0.84,
+      })
+      input.onProgress?.(25)
+    }
+  }
+
   let mediaPath: string | null = null
   let mediaBucket: string | null = null
+  let uploaded = false
 
-  if (input.file) {
-    const safeName = sanitizeFileName(input.file.name)
-    mediaPath = `${input.userId}/${Date.now()}-${safeName}`
+  if (source) {
+    // اسم عشوائي بدل اسم الملف الأصلي: يمنع تسريب أسماء الصور ويمنع التعارض.
+    const safeName = sanitizeFileName(source.name)
+    const ext =
+      (safeName.split('.').pop() || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 8) || 'bin'
+    mediaPath = `${input.userId}/${randomStickerId()}.${ext}`
     mediaBucket = BUCKETS.statusMedia
-    input.onProgress?.(15)
     const { error } = await supabase.storage
       .from(BUCKETS.statusMedia)
-      .upload(mediaPath, input.file, { contentType: input.file.type || undefined, upsert: false })
+      .upload(mediaPath, source, { contentType: source.type || undefined, upsert: false })
     if (error) throw error
-    input.onProgress?.(90)
+    uploaded = true
+    input.onProgress?.(70)
   }
 
   const result = await supabase
@@ -818,9 +856,9 @@ export async function createStatus(input: {
     .insert({
       user_id: input.userId,
       type: input.type,
-      content: input.content ?? null,
-      background: input.background ?? null,
-      caption: input.caption ?? null,
+      content,
+      background: input.type === 'text' ? input.background ?? null : null,
+      caption: input.type === 'text' ? null : (input.caption ?? '').trim().slice(0, 200) || null,
       audience: input.audience,
       media_path: mediaPath,
       media_bucket: mediaBucket,
@@ -828,14 +866,31 @@ export async function createStatus(input: {
     .select('*')
     .single()
 
-  const status = unwrap<Status>(result, 'createStatus')
+  if (result.error) {
+    if (uploaded && mediaPath) {
+      await supabase.storage.from(BUCKETS.statusMedia).remove([mediaPath]).catch(() => undefined)
+    }
+    throw result.error
+  }
 
-  if (input.audience === 'selected' || input.audience === 'except') {
-    const ids = input.audienceIds ?? []
-    if (ids.length) {
-      await supabase
-        .from('status_audience')
-        .insert(ids.map((userId) => ({ status_id: status.id, user_id: userId })))
+  const status = result.data as Status
+  const ids = Array.from(new Set(input.audienceIds ?? [])).filter(Boolean)
+
+  if ((input.audience === 'selected' || input.audience === 'except') && ids.length) {
+    const audienceResult = await supabase
+      .from('status_audience')
+      .insert(ids.map((userId) => ({ status_id: status.id, user_id: userId })))
+    if (audienceResult.error) {
+      // لا نترك حالة بخصوصية ناقصة إذا فشل حفظ قائمة الجمهور.
+      try {
+        await supabase.from('statuses').delete().eq('id', status.id)
+      } catch {
+        // تجاهل فشل التنظيف؛ الخطأ الأصلي هو المهم.
+      }
+      if (uploaded && mediaPath) {
+        await supabase.storage.from(BUCKETS.statusMedia).remove([mediaPath]).catch(() => undefined)
+      }
+      throw audienceResult.error
     }
   }
 
@@ -843,9 +898,27 @@ export async function createStatus(input: {
   return status
 }
 
-export async function deleteStatus(statusId: string): Promise<void> {
+export async function deleteStatus(status: string | Pick<Status, 'id'>): Promise<void> {
+  const statusId = typeof status === 'string' ? status : status.id
+  const lookup = await supabase
+    .from('statuses')
+    .select('media_bucket, media_path')
+    .eq('id', statusId)
+    .maybeSingle()
+
+  if (lookup.error) throw lookup.error
+
   const result = await supabase.from('statuses').delete().eq('id', statusId)
   if (result.error) throw result.error
+
+  const mediaPath = (lookup.data as { media_path?: string | null } | null)?.media_path
+  const mediaBucket = (lookup.data as { media_bucket?: string | null } | null)?.media_bucket
+  if (mediaPath) {
+    await supabase.storage
+      .from(mediaBucket || BUCKETS.statusMedia)
+      .remove([mediaPath])
+      .catch(() => undefined)
+  }
 }
 
 export async function viewStatus(statusId: string, viewerId: string): Promise<void> {

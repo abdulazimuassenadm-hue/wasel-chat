@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Check, CircleDot, Eye, Plus, Search, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, CircleDot, Eye, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
@@ -10,7 +10,8 @@ import { SelectField, TextArea } from '@/components/ui/Field'
 import { EmptyState, Spinner } from '@/components/ui/Misc'
 import { PageHeader } from '@/components/layout/AppLayout'
 import * as api from '@/lib/api'
-import { cn, formatLastSeen, timeAgo } from '@/lib/utils'
+import { UPLOAD_LIMITS } from '@/lib/supabase'
+import { cn, errorKey, formatBytes, formatLastSeen, timeAgo } from '@/lib/utils'
 import type { Contact, Status, StatusAudience } from '@/types'
 
 const BACKGROUNDS = [
@@ -117,7 +118,8 @@ export function StatusPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      if (!window.confirm(t('confirm_delete_status'))) return
                       void api
                         .deleteStatus(mine[0].id)
                         .then(() => {
@@ -125,7 +127,7 @@ export function StatusPage() {
                           void load()
                         })
                         .catch(() => toast.error(t('generic_error')))
-                    }
+                    }}
                     className="rounded-full p-2 text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-950/40"
                     aria-label={t('delete_status')}
                   >
@@ -185,6 +187,21 @@ export function StatusPage() {
             setViewer(null)
             void load()
           }}
+          onShowViewers={(status) => {
+            setViewer(null)
+            setViewersOf(status)
+          }}
+          onDelete={(status) => {
+            if (!window.confirm(t('confirm_delete_status'))) return
+            void api
+              .deleteStatus(status)
+              .then(() => {
+                toast.success(t('status_deleted'))
+                setViewer(null)
+                void load()
+              })
+              .catch(() => toast.error(t('generic_error')))
+          }}
         />
       )}
 
@@ -232,10 +249,14 @@ function StoryViewer({
   ids,
   statuses,
   onClose,
+  onShowViewers,
+  onDelete,
 }: {
   ids: string[]
   statuses: Status[]
   onClose: () => void
+  onShowViewers?: (status: Status) => void
+  onDelete?: (status: Status) => void
 }) {
   const { t, lang, dir } = useApp()
   const { user } = useAuth()
@@ -266,14 +287,14 @@ function StoryViewer({
 
   // تعليم كمشاهدة + مؤقّت التقدّم
   useEffect(() => {
-    if (!current || !user) return
+    if (!current || !user || current.user_id === user.id) return
     void api.viewStatus(current.id, user.id).catch(() => undefined)
   }, [current, user])
 
   useEffect(() => {
     setProgress(0)
-    if (!current) return
-    const duration = current.type === 'text' ? 5000 : current.type === 'image' ? 6000 : 12000
+    if (!current || current.type === 'video') return
+    const duration = current.type === 'text' ? 5000 : 6000
     const start = Date.now()
     const tick = window.setInterval(() => {
       const percent = Math.min(100, ((Date.now() - start) / duration) * 100)
@@ -314,6 +335,27 @@ function StoryViewer({
           <p className="truncate text-sm font-bold text-white">{author?.display_name}</p>
           <p className="text-[11px] text-white/60">{timeAgo(current.created_at, lang)}</p>
         </div>
+        {current.user_id === user?.id && onShowViewers && (
+          <button
+            type="button"
+            onClick={() => onShowViewers(current)}
+            className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20"
+            title={t('viewers')}
+          >
+            <Eye className="h-4 w-4" />
+            {current.viewerCount ?? 0}
+          </button>
+        )}
+        {current.user_id === user?.id && onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(current)}
+            className="rounded-full p-2 text-white/80 transition hover:bg-rose-500/30 hover:text-white"
+            aria-label={t('delete_status')}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}
@@ -348,25 +390,50 @@ function StoryViewer({
             <img src={current.mediaUrl} alt={current.caption ?? ''} className="max-h-full max-w-full rounded-2xl object-contain" />
           )}
           {current.type === 'video' && current.mediaUrl && (
-            <video src={current.mediaUrl} autoPlay controls className="max-h-full max-w-full rounded-2xl" />
+            <video
+              src={current.mediaUrl}
+              autoPlay
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-full max-w-full rounded-2xl"
+              onTimeUpdate={(event) => {
+                const duration = event.currentTarget.duration
+                if (Number.isFinite(duration) && duration > 0) {
+                  setProgress(Math.min(100, (event.currentTarget.currentTime / duration) * 100))
+                }
+              }}
+              onEnded={goNext}
+            />
           )}
           {current.caption && current.type !== 'text' && (
-            <p className="absolute inset-x-4 bottom-6 rounded-2xl bg-black/60 px-4 py-2 text-center text-sm text-white">
+            <p
+              className={cn(
+                'absolute inset-x-4 rounded-2xl bg-black/60 px-4 py-2 text-center text-sm text-white',
+                current.type === 'video' ? 'bottom-20' : 'bottom-6',
+              )}
+            >
               {current.caption}
             </p>
           )}
 
-          {/* أزرار التنقل */}
+          {/* أزرار التنقل — نترك أسفل الفيديو لأدوات التحكم الأصلية */}
           <button
             type="button"
             onClick={goPrev}
-            className="absolute inset-y-0 start-0 w-1/4"
+            className={cn(
+              'absolute start-0 w-1/4',
+              current.type === 'video' ? 'top-0 bottom-24' : 'inset-y-0',
+            )}
             aria-label={t('prev_status')}
           />
           <button
             type="button"
             onClick={goNext}
-            className="absolute inset-y-0 end-0 w-1/4"
+            className={cn(
+              'absolute end-0 w-1/4',
+              current.type === 'video' ? 'top-0 bottom-24' : 'inset-y-0',
+            )}
             aria-label={t('next_status')}
           />
           <span className="pointer-events-none absolute start-2 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-2 text-white/70">
@@ -390,7 +457,7 @@ function StatusComposer({
   onClose: () => void
   onPosted: () => void
 }) {
-  const { t } = useApp()
+  const { t, lang } = useApp()
   const { user, profile } = useAuth()
   const toast = useToast()
 
@@ -404,7 +471,16 @@ function StatusComposer({
   const [contactTerm, setContactTerm] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [fileInfo, setFileInfo] = useState('')
+  const [progress, setProgress] = useState(0)
   const [busy, setBusy] = useState(false)
+  const previewRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    }
+  }, [])
 
   // تحميل جهات الاتصال عند فتح النافذة + تهيئة الخصوصية من إعدادات المستخدم
   useEffect(() => {
@@ -431,6 +507,17 @@ function StatusComposer({
     setAudienceIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
   }
 
+  const clearFile = () => {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current)
+      previewRef.current = null
+    }
+    setFile(null)
+    setPreview(null)
+    setFileInfo('')
+    setProgress(0)
+  }
+
   const reset = () => {
     setType('text')
     setContent('')
@@ -439,19 +526,39 @@ function StatusComposer({
     setAudience('everyone')
     setAudienceIds([])
     setContactTerm('')
-    setFile(null)
-    setPreview(null)
+    clearFile()
     setBusy(false)
+  }
+
+  const selectType = (next: 'text' | 'image' | 'video') => {
+    if (next === 'text') {
+      setType('text')
+      return
+    }
+    if (file) {
+      const matches = next === 'image' ? file.type.startsWith('image/') : file.type.startsWith('video/')
+      if (!matches) clearFile()
+    }
+    setType(next)
   }
 
   const pickFile = (selected: File | null) => {
     if (!selected) return
-    if (selected.size > 25 * 1024 * 1024) {
-      toast.error(t('file_too_large', { n: 25 }))
+    if (!selected.type.startsWith('image/') && !selected.type.startsWith('video/')) {
+      toast.error(t('file_type_not_allowed'))
       return
     }
+    if (selected.size > UPLOAD_LIMITS.statusMedia * 1024 * 1024) {
+      toast.error(t('file_too_large', { n: UPLOAD_LIMITS.statusMedia }))
+      return
+    }
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    const url = URL.createObjectURL(selected)
+    previewRef.current = url
     setFile(selected)
-    setPreview(URL.createObjectURL(selected))
+    setPreview(url)
+    setFileInfo(formatBytes(selected.size, lang))
+    setProgress(0)
     if (selected.type.startsWith('video')) setType('video')
     else setType('image')
   }
@@ -463,27 +570,30 @@ function StatusComposer({
       toast.error(t('no_file_selected'))
       return
     }
-    if (audience === 'selected' && !audienceIds.length) {
+    if ((audience === 'selected' || audience === 'except') && !audienceIds.length) {
       toast.error(t('choose_contacts'))
       return
     }
     setBusy(true)
+    setProgress(0)
     try {
       await api.createStatus({
         userId: user.id,
         type,
         content: type === 'text' ? content.trim() : null,
         background: type === 'text' ? background : null,
-        caption: caption.trim() || null,
+        caption: type === 'text' ? null : caption.trim() || null,
         audience,
         audienceIds: audience === 'selected' || audience === 'except' ? audienceIds : undefined,
-        file,
+        file: type === 'text' ? null : file,
+        onProgress: setProgress,
       })
       toast.success(t('status_posted'))
       reset()
       onPosted()
-    } catch {
-      toast.error(t('generic_error'))
+    } catch (error) {
+      const key = errorKey(error)
+      toast.error(t(key, key === 'file_too_large' ? { n: UPLOAD_LIMITS.statusMedia } : undefined))
     } finally {
       setBusy(false)
     }
@@ -493,6 +603,7 @@ function StatusComposer({
     <Modal
       open={open}
       onClose={() => {
+        if (busy) return
         reset()
         onClose()
       }}
@@ -505,10 +616,15 @@ function StatusComposer({
               reset()
               onClose()
             }}
+            disabled={busy}
           >
             {t('cancel')}
           </Button>
-          <Button onClick={() => void submit()} loading={busy}>
+          <Button
+            onClick={() => void submit()}
+            loading={busy}
+            disabled={type === 'text' ? !content.trim() : !file}
+          >
             {t('post_status')}
           </Button>
         </>
@@ -519,7 +635,7 @@ function StatusComposer({
           <button
             key={item}
             type="button"
-            onClick={() => setType(item)}
+            onClick={() => selectType(item)}
             className={cn(
               'flex-1 rounded-2xl border px-3 py-2.5 text-sm font-semibold transition',
               type === item
@@ -531,6 +647,21 @@ function StatusComposer({
           </button>
         ))}
       </div>
+
+      {busy && (
+        <div className="mb-4">
+          <div className="mb-1 flex items-center justify-between text-xs font-semibold text-ink-500 dark:text-ink-400">
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t('status_uploading')}
+            </span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+            <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${Math.max(4, progress)}%` }} />
+          </div>
+        </div>
+      )}
 
       {type === 'text' ? (
         <div className={cn('mb-4 flex min-h-[160px] items-center justify-center rounded-3xl bg-gradient-to-br p-5', background)}>
@@ -547,23 +678,46 @@ function StatusComposer({
           <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-ink-300 py-10 text-ink-500 transition hover:bg-ink-50 dark:border-ink-700 dark:hover:bg-ink-800/60">
             {preview ? (
               type === 'video' ? (
-                <video src={preview} className="max-h-56 rounded-2xl" controls />
+                <video
+                  src={preview}
+                  className="max-h-56 rounded-2xl"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  onClick={(event) => event.stopPropagation()}
+                />
               ) : (
-                <img src={preview} alt="" className="max-h-56 rounded-2xl object-contain" />
+                <img
+                  src={preview}
+                  alt=""
+                  className="max-h-56 rounded-2xl object-contain"
+                  onError={() => {
+                    toast.error(t('file_type_not_allowed'))
+                    clearFile()
+                  }}
+                />
               )
             ) : (
               <>
                 <Plus className="h-6 w-6" />
-                <span className="text-sm font-semibold">{t('setup_choose_avatar')}</span>
+                <span className="text-sm font-semibold">{t('status_choose_media')}</span>
               </>
             )}
             <input
               type="file"
               accept={type === 'video' ? 'video/*' : 'image/*'}
               hidden
-              onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => {
+                pickFile(event.target.files?.[0] ?? null)
+                event.currentTarget.value = ''
+              }}
             />
           </label>
+          <p className="mt-2 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+            {file ? `${file.name} · ${fileInfo}` : ''}
+            {file ? ' — ' : ''}
+            {type === 'image' ? t('status_image_compress_hint') : t('status_video_hint')}
+          </p>
         </div>
       )}
 

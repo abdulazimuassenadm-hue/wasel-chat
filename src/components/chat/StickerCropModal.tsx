@@ -1,17 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
-import { Minus, Plus, RotateCcw } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Eraser, Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
-import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { Switch } from '@/components/ui/Field'
+import { Modal } from '@/components/ui/Modal'
+import {
+  encodeStickerCanvas,
+  removeConnectedBackground,
+  trimTransparentCanvas,
+} from '@/lib/media'
+import { UPLOAD_LIMITS } from '@/lib/supabase'
 
 const VIEW = 260
 const OUTPUT = 512
+const CHECKERBOARD =
+  'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)'
 
 /**
- * أداة بسيطة لتجهيز صورة كملصق:
- * - تكبير/تصغير
- * - سحب لتحديد الجزء الظاهر
- * - تصدير مربّع 512×512 بصيغة PNG
+ * أداة تجهيز صورة كملصق:
+ * - تكبير/تصغير وسحب لتحديد الجزء الظاهر
+ * - معاينة مباشرة للنتيجة
+ * - إزالة خلفية محلية اختيارية للخلفيات البسيطة
+ * - تصدير مربّع مضغوط (WebP/PNG) مع الحفاظ على الشفافية
  */
 export function StickerCropModal({
   open,
@@ -33,9 +43,22 @@ export function StickerCropModal({
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [removeBackground, setRemoveBackground] = useState(false)
+  const [tolerance, setTolerance] = useState(38)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
 
   const imageRef = useRef<HTMLImageElement>(null)
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
+
+  const revokePreview = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+    setPreviewUrl(null)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -45,7 +68,21 @@ export function StickerCropModal({
     setName(defaultName ?? '')
     setFailed(false)
     setSaving(false)
-  }, [open, src, defaultName])
+    setRemoveBackground(false)
+    setTolerance(38)
+    revokePreview()
+  }, [open, src, defaultName, revokePreview])
+
+  useEffect(() => {
+    if (open) return
+    revokePreview()
+  }, [open, revokePreview])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    }
+  }, [])
 
   const baseScale = natural.w > 0 && natural.h > 0 ? Math.max(VIEW / natural.w, VIEW / natural.h) : 1
   const scale = baseScale * zoom
@@ -81,34 +118,101 @@ export function StickerCropModal({
     dragRef.current = null
   }
 
-  const save = async () => {
-    const image = imageRef.current
-    if (!image || !natural.w || !natural.h) return
-    setSaving(true)
-    setFailed(false)
-    try {
-      const s = baseScale * zoom
-      const sourceW = Math.min(natural.w, VIEW / s)
-      const sourceH = Math.min(natural.h, VIEW / s)
-      const imgLeft = (VIEW - renderedW) / 2 + offset.x
-      const imgTop = (VIEW - renderedH) / 2 + offset.y
-      let sourceX = (0 - imgLeft) / s
-      let sourceY = (0 - imgTop) / s
-      sourceX = Math.max(0, Math.min(natural.w - sourceW, sourceX))
-      sourceY = Math.max(0, Math.min(natural.h - sourceH, sourceY))
+  const getCropRect = useCallback(() => {
+    if (!natural.w || !natural.h) return null
+    const s = baseScale * zoom
+    const sourceW = Math.min(natural.w, VIEW / s)
+    const sourceH = Math.min(natural.h, VIEW / s)
+    const imgLeft = (VIEW - renderedW) / 2 + offset.x
+    const imgTop = (VIEW - renderedH) / 2 + offset.y
+    let sourceX = (0 - imgLeft) / s
+    let sourceY = (0 - imgTop) / s
+    sourceX = Math.max(0, Math.min(natural.w - sourceW, sourceX))
+    sourceY = Math.max(0, Math.min(natural.h - sourceH, sourceY))
+    return { sourceX, sourceY, sourceW, sourceH }
+  }, [baseScale, natural.h, natural.w, offset.x, offset.y, renderedH, renderedW, zoom])
+
+  const drawCroppedCanvas = useCallback(
+    (size: number): HTMLCanvasElement | null => {
+      const image = imageRef.current
+      const rect = getCropRect()
+      if (!image || !rect) return null
 
       const canvas = document.createElement('canvas')
-      canvas.width = OUTPUT
-      canvas.height = OUTPUT
-      const context = canvas.getContext('2d')
+      canvas.width = size
+      canvas.height = size
+      const context = canvas.getContext('2d', { willReadFrequently: true })
       if (!context) throw new Error('CANVAS_UNAVAILABLE')
       context.imageSmoothingEnabled = true
       context.imageSmoothingQuality = 'high'
-      context.clearRect(0, 0, OUTPUT, OUTPUT)
-      context.drawImage(image, sourceX, sourceY, sourceW, sourceH, 0, 0, OUTPUT, OUTPUT)
+      context.clearRect(0, 0, size, size)
+      context.drawImage(
+        image,
+        rect.sourceX,
+        rect.sourceY,
+        rect.sourceW,
+        rect.sourceH,
+        0,
+        0,
+        size,
+        size,
+      )
 
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png', 0.95))
-      if (!blob) throw new Error('EXPORT_FAILED')
+      if (removeBackground) {
+        removeConnectedBackground(canvas, tolerance)
+        return trimTransparentCanvas(canvas, size, Math.max(6, Math.round(size * 0.04)))
+      }
+      return canvas
+    },
+    [getCropRect, removeBackground, tolerance],
+  )
+
+  // معاينة مصغّرة تتحدّث بعد توقف السحب/التكبير بمدة قصيرة.
+  useEffect(() => {
+    if (!open || !src || !natural.w || !natural.h) {
+      revokePreview()
+      return
+    }
+    let cancelled = false
+    setPreviewBusy(true)
+    const timer = window.setTimeout(() => {
+      try {
+        const canvas = drawCroppedCanvas(180)
+        if (!canvas) {
+          if (!cancelled) setPreviewBusy(false)
+          return
+        }
+        canvas.toBlob((blob) => {
+          if (cancelled) return
+          if (!blob) {
+            setPreviewBusy(false)
+            return
+          }
+          const url = URL.createObjectURL(blob)
+          if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+          previewUrlRef.current = url
+          setPreviewUrl(url)
+          setPreviewBusy(false)
+        }, 'image/png')
+      } catch {
+        if (!cancelled) setPreviewBusy(false)
+      }
+    }, 140)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [drawCroppedCanvas, natural.h, natural.w, open, revokePreview, src])
+
+  const save = async () => {
+    if (!natural.w || !natural.h) return
+    setSaving(true)
+    setFailed(false)
+    try {
+      const canvas = drawCroppedCanvas(OUTPUT)
+      if (!canvas) throw new Error('CANVAS_UNAVAILABLE')
+      const blob = await encodeStickerCanvas(canvas, UPLOAD_LIMITS.sticker * 1024 * 1024)
       await onSave(blob, name)
     } catch {
       setFailed(true)
@@ -120,7 +224,9 @@ export function StickerCropModal({
   return (
     <Modal
       open={open}
-      onClose={onCancel}
+      onClose={() => {
+        if (!saving) onCancel()
+      }}
       title={t('sticker_crop_title')}
       subtitle={t('sticker_crop_hint')}
       size="sm"
@@ -208,6 +314,52 @@ export function StickerCropModal({
           >
             <RotateCcw className="h-4 w-4" />
           </button>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-2xl bg-ink-50 p-2.5 dark:bg-ink-800/60">
+          <div
+            className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ink-200 bg-white dark:border-ink-700"
+            style={{ backgroundImage: CHECKERBOARD, backgroundSize: '14px 14px', backgroundPosition: '0 0, 0 7px, 7px -7px, -7px 0px' }}
+          >
+            {previewUrl ? (
+              <img src={previewUrl} alt={t('sticker_result_preview')} className="h-full w-full object-contain" draggable={false} />
+            ) : previewBusy ? (
+              <Loader2 className="h-5 w-5 animate-spin text-ink-400" />
+            ) : null}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-ink-700 dark:text-ink-200">{t('sticker_result_preview')}</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-ink-500 dark:text-ink-400">
+              {t('sticker_result_hint')}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-ink-200 px-3 dark:border-ink-700">
+          <Switch
+            checked={removeBackground}
+            onChange={(value) => setRemoveBackground(value)}
+            label={t('sticker_remove_background')}
+            hint={t('sticker_remove_background_hint')}
+          />
+          {removeBackground && (
+            <div className="pb-3">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-ink-500 dark:text-ink-400">
+                <Eraser className="h-3.5 w-3.5" />
+                {t('sticker_background_tolerance')}
+              </div>
+              <input
+                type="range"
+                min={18}
+                max={70}
+                step={2}
+                value={tolerance}
+                onChange={(event) => setTolerance(Number(event.target.value))}
+                className="h-1.5 w-full cursor-pointer accent-brand-600"
+                aria-label={t('sticker_background_tolerance')}
+              />
+            </div>
+          )}
         </div>
 
         <div>

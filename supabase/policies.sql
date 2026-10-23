@@ -413,7 +413,14 @@ begin
     when 'selected' then
       return v_selected;
     when 'except' then
-      return v_is_contact and not v_selected;
+      -- لا نعتبر «الجميع ما عدا...» صالحة قبل حفظ قائمة الاستثناءات،
+      -- وإلا ظهرت الحالة لجهات الاتصال في الفترة بين إنشائها وحفظ القائمة.
+      return v_is_contact
+        and not v_selected
+        and exists (
+          select 1 from public.status_audience a
+          where a.status_id = p_status.id
+        );
     else
       return false;
   end case;
@@ -428,13 +435,57 @@ create policy statuses_select on public.statuses
 drop policy if exists statuses_insert on public.statuses;
 create policy statuses_insert on public.statuses
   for insert to authenticated
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    and expires_at > now()
+    and expires_at <= now() + interval '24 hours'
+    and (
+      (
+        type = 'text'
+        and content is not null
+        and length(btrim(content)) between 1 and 300
+        and media_path is null
+        and media_bucket is null
+      )
+      or
+      (
+        type in ('image','video')
+        and content is null
+        and media_path is not null
+        and media_bucket = 'status-media'
+        and media_path like (auth.uid()::text || '/%')
+        and (caption is null or length(caption) <= 200)
+      )
+    )
+  );
 
 drop policy if exists statuses_update on public.statuses;
 create policy statuses_update on public.statuses
   for update to authenticated
   using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    and expires_at > now()
+    and expires_at <= now() + interval '24 hours'
+    and (
+      (
+        type = 'text'
+        and content is not null
+        and length(btrim(content)) between 1 and 300
+        and media_path is null
+        and media_bucket is null
+      )
+      or
+      (
+        type in ('image','video')
+        and content is null
+        and media_path is not null
+        and media_bucket = 'status-media'
+        and media_path like (auth.uid()::text || '/%')
+        and (caption is null or length(caption) <= 200)
+      )
+    )
+  );
 
 drop policy if exists statuses_delete on public.statuses;
 create policy statuses_delete on public.statuses

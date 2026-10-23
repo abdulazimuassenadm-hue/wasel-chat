@@ -237,6 +237,8 @@ create table if not exists public.status_views (
   unique (status_id, viewer_id)
 );
 
+create index if not exists status_views_viewer_idx on public.status_views (viewer_id, status_id);
+
 create table if not exists public.status_audience (
   id uuid primary key default gen_random_uuid(),
   status_id uuid not null references public.statuses(id) on delete cascade,

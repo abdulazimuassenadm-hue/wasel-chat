@@ -13,7 +13,6 @@ import {
   stickerLabel,
   type StickerPackId,
 } from '@/lib/stickers'
-import { UPLOAD_LIMITS } from '@/lib/supabase'
 import type { UserSticker } from '@/types'
 import { StickerCropModal } from './StickerCropModal'
 
@@ -87,6 +86,11 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
     setPreview(null)
     setConfirmDelete(null)
     setCropSrc(null)
+    setCropName('')
+    if (cropUrlRef.current) {
+      URL.revokeObjectURL(cropUrlRef.current)
+      cropUrlRef.current = null
+    }
   }, [open])
 
   useEffect(() => {
@@ -99,13 +103,15 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
 
   const startUpload = (file: File | null) => {
     if (!file) return
-    const allowed = ['image/png', 'image/jpeg', 'image/webp']
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']
     if (!allowed.includes(file.type)) {
       toast.error(t('file_type_not_allowed'))
       return
     }
-    if (file.size > UPLOAD_LIMITS.sticker * 1024 * 1024) {
-      toast.error(t('file_too_large', { n: UPLOAD_LIMITS.sticker }))
+    // الصورة الأصلية قد تكون كبيرة؛ نسمح بها ثم نقصّها ونضغطها إلى ملصق صغير.
+    const sourceLimit = 25
+    if (file.size > sourceLimit * 1024 * 1024) {
+      toast.error(t('file_too_large', { n: sourceLimit }))
       return
     }
     if (cropUrlRef.current) URL.revokeObjectURL(cropUrlRef.current)
@@ -119,8 +125,6 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
     setSavingSticker(true)
     try {
       const created = await api.createUserSticker(userId, blob, name)
-      setMine((prev) => [created, ...prev])
-      setLoaded(true)
       setLibraryError(null)
       setCropSrc(null)
       if (cropUrlRef.current) {
@@ -128,6 +132,12 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
         cropUrlRef.current = null
       }
       setTab('mine')
+      if (loaded) {
+        setMine((prev) => [created, ...prev])
+      } else {
+        // إذا لم تكن المكتبة محمّلة بعد، نعيد جلبها كاملة حتى لا تختفي الملصقات القديمة.
+        void loadLibrary()
+      }
       toast.success(t('sticker_saved'))
     } catch (error) {
       toast.error(t(setupError(error) ? 'sticker_upload_unavailable' : errorKey(error)))
@@ -207,6 +217,16 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
           </button>
           <button
             type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex shrink-0 items-center gap-1 rounded-full border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-50 dark:border-brand-800 dark:text-brand-200 dark:hover:bg-brand-950/40"
+            title={t('sticker_create')}
+            aria-label={t('sticker_create')}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t('sticker_create')}</span>
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             className="ms-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-400 hover:bg-ink-100 dark:hover:bg-ink-800"
             aria-label={t('close')}
@@ -266,9 +286,11 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-ink-300 text-ink-500 transition hover:border-brand-400 hover:bg-brand-50/50 hover:text-brand-600 dark:border-ink-600 dark:text-ink-300 dark:hover:bg-brand-950/30"
+                    aria-label={t('sticker_create')}
+                    title={t('sticker_create')}
                   >
                     <Plus className="h-5 w-5" />
-                    <span className="text-[10px] font-bold">{t('sticker_add_short')}</span>
+                    <span className="text-[10px] font-bold">{t('sticker_create')}</span>
                   </button>
                   {mine.map((sticker) => (
                     <div key={sticker.id} className="group relative aspect-square">
@@ -330,7 +352,7 @@ export function StickerPicker({ open, userId, onClose, onSendBuiltin, onSendLibr
         <input
           ref={fileRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
           hidden
           onChange={(event) => {
             startUpload(event.target.files?.[0] ?? null)

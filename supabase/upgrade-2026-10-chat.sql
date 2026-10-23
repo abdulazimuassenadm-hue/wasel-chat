@@ -3,12 +3,22 @@
 -- تحديث ترقية: الملصقات الشخصية + البحث برقم الهاتف
 -- ----------------------------------------------------------------------------
 -- طريقة التطبيق:
---   1) افتح لوحة Supabase → SQL Editor.
---   2) الصق محتوى هذا الملف كاملاً واضغط Run.
---   3) الملف آمن للتشغيل أكثر من مرة (idempotent) ولا يحذف أي بيانات موجودة.
+--   1) راجع استعلامات «التحقق قبل التنفيذ» في نهاية الملف (قراءة فقط).
+--   2) افتح لوحة Supabase → SQL Editor.
+--   3) الصق محتوى هذا الملف كاملاً واضغط Run.
+--   4) الملف آمن للتشغيل أكثر من مرة (idempotent) ولا يحذف أي بيانات موجودة.
 --
--- ملاحظة: لم نعدّل أي جدول قائم ولا أي سياسة قائمة؛ كل ما هنا إضافات جديدة.
+-- المعاملة والأخطاء:
+--   كل الأوامر داخل BEGIN ... COMMIT واحدة. أي خطأ في أي أمر يوقف المعاملة
+--   ويلغي كل التغييرات (لا يوجد تنفيذ جزئي). عند ظهور خطأ:
+--     - راجع رسالة الخطأ وأصلح السبب.
+--     - نفّذ ROLLBACK; إن كان المحرر ما زال داخل معاملة.
+--     - أعد تشغيل الملف كاملاً بعد الإصلاح.
+--   لا نستخدم EXCEPTION يتجاهل الأخطاء؛ الفحص المسبق فقط يرفع تحذيراً/خطأً
+--   واضحاً قبل أي تعديل، ثم تبقى بقية الأوامر محمية بالمعاملة.
 -- ============================================================================
+
+begin;
 
 -- ============================================================================
 -- 1) جدول ملصقات المستخدم (مكتبة «ملصقاتي»)
@@ -28,34 +38,106 @@ create index if not exists user_stickers_user_created_idx
 
 alter table public.user_stickers enable row level security;
 
+-- قيد دفاعي إضافي: يمنع حتى service_role من إدخال صف يشير إلى حاوية أخرى
+-- أو إلى مجلد مستخدم آخر. NOT VALID لا يفحص الصفوف القديمة، لكنه يُطبّق على
+-- كل إدخال/تعديل جديد. راجع الصفوف القديمة بالاستعلام الموجود في نهاية الملف.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.user_stickers'::regclass
+      and conname = 'user_stickers_owner_path_check'
+  ) then
+    alter table public.user_stickers
+      add constraint user_stickers_owner_path_check
+      check (
+        bucket = 'stickers'
+        and path like user_id::text || '/%'
+        and position('..' in path) = 0
+      ) not valid;
+  end if;
+end $$;
+
 drop policy if exists user_stickers_select_own on public.user_stickers;
 create policy user_stickers_select_own on public.user_stickers
   for select to authenticated
   using (auth.uid() = user_id);
 
+-- لا يسمح الإدخال إلا بمسار داخل مجلد المستخدم نفسه وفي حاوية stickers.
 drop policy if exists user_stickers_insert_own on public.user_stickers;
 create policy user_stickers_insert_own on public.user_stickers
   for insert to authenticated
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and bucket = 'stickers'
+    and path like auth.uid()::text || '/%'
+    and position('..' in path) = 0
+  );
 
 drop policy if exists user_stickers_update_own on public.user_stickers;
 create policy user_stickers_update_own on public.user_stickers
   for update to authenticated
   using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and bucket = 'stickers'
+    and path like auth.uid()::text || '/%'
+    and position('..' in path) = 0
+  );
 
 drop policy if exists user_stickers_delete_own on public.user_stickers;
 create policy user_stickers_delete_own on public.user_stickers
   for delete to authenticated
   using (auth.uid() = user_id);
 
-grant select, insert, update, delete on public.user_stickers to authenticated;
+-- المستخدم لا يعدّل إلا اسم الملصق. تحديث user_id/bucket/path ممنوع أصلاً
+-- على مستوى صلاحيات الأعمدة، إضافةً إلى RLS وقيد الجدول أعلاه.
+revoke update on public.user_stickers from authenticated;
+grant select, insert, delete on public.user_stickers to authenticated;
+grant update (name) on public.user_stickers to authenticated;
 
 -- ============================================================================
 -- 2) حاوية التخزين الخاصة بملصقات المستخدمين
 --    خاصة (public = false): لا يقرأها إلا صاحبها عبر روابط موقّعة.
 --    عند إرسال ملصق في محادثة تُنسخ الصورة إلى chat-media ليصل إليها الطرف الآخر.
+--
+--    مهم: لا نغيّر إعدادات حاوية موجودة. إذا كانت موجودة نفحصها فقط:
+--      - public=true → خطأ يوقف المعاملة (تسريب أمني يجب مراجعته يدوياً).
+--      - اختلاف الحجم/الأنواع → تحذير فقط، دون تعديل.
+--    الحاوية الجديدة فقط تُنشأ بالإعدادات الآمنة أدناه.
 -- ============================================================================
+do $$
+declare
+  v_bucket record;
+begin
+  select
+    b.id,
+    b.public as is_public,
+    b.file_size_limit,
+    b.allowed_mime_types
+  into v_bucket
+  from storage.buckets b
+  where b.id = 'stickers';
+
+  if found then
+    if v_bucket.is_public is distinct from false then
+      raise exception
+        'STICKERS_BUCKET_PUBLIC_CONFLICT: الحاوية stickers موجودة كعامة. راجعها يدوياً قبل التنفيذ، ثم أعد المحاولة.';
+    end if;
+
+    if v_bucket.file_size_limit is distinct from 3145728
+       or v_bucket.allowed_mime_types is distinct from
+          array['image/png', 'image/jpeg', 'image/webp']::text[] then
+      raise warning
+        'STICKERS_BUCKET_SETTINGS_DIFFER: الحاوية موجودة بإعدادات مختلفة (public=%, size=%, mime=%) ولم تُعدّل. راجعها قبل الاعتماد على قيود الأنواع/الحجم.',
+        v_bucket.is_public,
+        v_bucket.file_size_limit,
+        v_bucket.allowed_mime_types;
+    end if;
+  end if;
+end $$;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'stickers',
@@ -64,10 +146,7 @@ values (
   3145728,
   array['image/png', 'image/jpeg', 'image/webp']
 )
-on conflict (id) do update
-  set public = excluded.public,
-      file_size_limit = excluded.file_size_limit,
-      allowed_mime_types = excluded.allowed_mime_types;
+on conflict (id) do nothing;
 
 drop policy if exists "stickers_read_own" on storage.objects;
 create policy "stickers_read_own" on storage.objects
@@ -75,6 +154,7 @@ create policy "stickers_read_own" on storage.objects
   using (
     bucket_id = 'stickers'
     and (storage.foldername(name))[1] = auth.uid()::text
+    and position('..' in name) = 0
   );
 
 drop policy if exists "stickers_insert_own" on storage.objects;
@@ -83,6 +163,7 @@ create policy "stickers_insert_own" on storage.objects
   with check (
     bucket_id = 'stickers'
     and (storage.foldername(name))[1] = auth.uid()::text
+    and position('..' in name) = 0
   );
 
 drop policy if exists "stickers_update_own" on storage.objects;
@@ -91,6 +172,7 @@ create policy "stickers_update_own" on storage.objects
   using (
     bucket_id = 'stickers'
     and (storage.foldername(name))[1] = auth.uid()::text
+    and position('..' in name) = 0
   );
 
 drop policy if exists "stickers_delete_own" on storage.objects;
@@ -99,16 +181,20 @@ create policy "stickers_delete_own" on storage.objects
   using (
     bucket_id = 'stickers'
     and (storage.foldername(name))[1] = auth.uid()::text
+    and position('..' in name) = 0
   );
 
 -- ============================================================================
 -- 3) البحث عن مستخدم برقم الهاتف
---    - يتطلب تسجيل الدخول.
+--    - يتطلب تسجيل الدخول، ولا تُمنح الصلاحية لـ anon.
 --    - يطبّق سياسات الخصوصية نفسها المستخدمة في get_user_public_profile
 --      (لا يعرض صورة/آخر ظهور/حالة إلا وفق إعدادات صاحب الحساب).
 --    - لا يعيد إلا البيانات العامة، ولا يعيد أرقام الهواتف نفسها.
 --    - يقبل: +249 91 234 5678 / 0912345678 / 912345678 / 00249912345678
---    - يدعم البحث الجزئي الآمن عندما يكتب المستخدم 7 أرقام أو أكثر.
+--      والأرقام العربية-الهندية (٠١٢٣...) والفارسية (۰۱۲...).
+--    - الإدخال الكامل (9 أرقام أو أكثر) يطابق الصيغة الكاملة/الوطنية فقط.
+--    - الإدخال الجزئي (7-8 أرقام) يطابق آخر الأرقام فقط، بحد أقصى 10 نتائج.
+--    - يستبعد الحساب نفسه، والحسابات الموقوفة، والمحظورة في أي اتجاه.
 -- ============================================================================
 create or replace function public.search_user_by_phone(p_query text)
 returns table (
@@ -129,65 +215,171 @@ as $$
 declare
   v_me uuid := auth.uid();
   v_digits text;
+  v_national text;
+  v_canonical text;
   v_forms text[];
-  v_tail text;
+  v_partial boolean := false;
+  v_suffix text := '';
 begin
   if v_me is null then
     return;
   end if;
 
-  -- أرقام فقط (يزيل + والمسافات والشرطات والأقواس)
-  v_digits := regexp_replace(coalesce(p_query, ''), '\D', '', 'g');
-  if length(v_digits) < 7 then
+  -- حد بسيط لطول المدخل قبل أي معالجة نصية
+  if length(coalesce(p_query, '')) > 64 then
     return;
   end if;
 
-  -- الصيغ الممكنة لرقم سوداني أو دولي
-  v_forms := array[v_digits];
-  if v_digits like '249%' then
-    v_forms := v_forms || substr(v_digits, 4);
-  elsif v_digits like '0%' then
-    v_forms := v_forms || ('249' || ltrim(v_digits, '0'));
-  else
-    v_forms := v_forms || ('249' || v_digits);
+  -- تحويل الأرقام العربية-الهندية والفارسية إلى لاتينية، ثم إزالة كل ما ليس رقماً
+  v_digits := regexp_replace(
+    translate(
+      coalesce(p_query, ''),
+      '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+      '01234567890123456789'
+    ),
+    '[^0-9]',
+    '',
+    'g'
+  );
+
+  if length(v_digits) < 7 or length(v_digits) > 15 then
+    return;
   end if;
 
-  -- آخر 7 إلى 9 أرقام (لمطابقة الأرقام المحلية دون رمز الدولة)
-  v_tail := right(v_digits, 9);
-  if length(v_tail) < 7 then
-    v_tail := v_digits;
+  -- 00249... تعني 249...
+  if left(v_digits, 2) = '00' then
+    v_digits := substr(v_digits, 3);
+  end if;
+
+  if length(v_digits) < 7 or length(v_digits) > 15 then
+    return;
+  end if;
+
+  if length(v_digits) < 9 then
+    -- بحث جزئي: 7-8 أرقام فقط، بمطابقة نهاية الرقم.
+    -- نزيل الصفر المحلي حتى يطابق «0912345» الرقم المخزّن «249912345678».
+    v_suffix := ltrim(v_digits, '0');
+    if length(v_suffix) < 7 then
+      return;
+    end if;
+    v_partial := true;
+  else
+    if left(v_digits, 1) = '0' then
+      v_national := ltrim(v_digits, '0');
+      if v_national = '' then
+        return;
+      end if;
+
+      if length(v_national) = 9 and left(v_national, 1) = '9' then
+        v_canonical := '249' || v_national;
+      elsif length(v_national) between 10 and 15 then
+        v_canonical := v_national;
+      else
+        return;
+      end if;
+    elsif left(v_digits, 3) = '249' then
+      if length(v_digits) < 12 or length(v_digits) > 15 then
+        return;
+      end if;
+      v_national := ltrim(substr(v_digits, 4), '0');
+      if length(v_national) = 9 and left(v_national, 1) = '9' then
+        v_canonical := '249' || v_national;
+      else
+        v_canonical := v_digits;
+      end if;
+    elsif length(v_digits) = 9 and left(v_digits, 1) = '9' then
+      v_national := v_digits;
+      v_canonical := '249' || v_digits;
+    else
+      v_national := v_digits;
+      v_canonical := v_digits;
+    end if;
+
+    -- الصيغ المقبولة للتخزين: الرقم الخام، الصيغة الكاملة، والوطنية،
+    -- مع صيغة الصفر المحلي وصيغة 00 الدولية للتوافق مع بيانات قديمة.
+    v_forms := array[v_digits, v_canonical];
+    if v_national is not null and v_national <> '' then
+      v_forms := v_forms || v_national;
+      if length(v_national) = 9 and left(v_national, 1) = '9' then
+        v_forms := v_forms || ('0' || v_national);
+      end if;
+    end if;
+    v_forms := v_forms || ('00' || v_canonical);
+
+    select array_agg(distinct f)
+      into v_forms
+      from unnest(v_forms) as u(f);
   end if;
 
   return query
-  select g.id, g.display_name, g.username, g.about, g.avatar_url, g.presence, g.last_seen, g.status_text
+  select
+    g.id,
+    g.display_name,
+    g.username,
+    g.about,
+    g.avatar_url,
+    g.presence,
+    g.last_seen,
+    g.status_text
   from (
-    select p.id
+    select
+      p.id,
+      p.updated_at,
+      regexp_replace(
+        translate(
+          coalesce(p.phone, ''),
+          '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+          '01234567890123456789'
+        ),
+        '[^0-9]',
+        '',
+        'g'
+      ) as phone_digits
     from public.profiles p
     where p.id <> v_me
       and p.phone is not null
-      and length(regexp_replace(p.phone, '\D', '', 'g')) >= 7
-      and (
-        regexp_replace(p.phone, '\D', '', 'g') = any(v_forms)
-        or right(regexp_replace(p.phone, '\D', '', 'g'), 9) = v_tail
-      )
+      and not p.is_suspended
       and not public.is_blocked_between(v_me, p.id)
-    order by
+  ) p
+  cross join lateral public.get_user_public_profile(p.id) g
+  where length(p.phone_digits) between 7 and 15
+    and (
       case
-        when regexp_replace(p.phone, '\D', '', 'g') = any(v_forms) then 0
-        else 1
-      end,
-      p.updated_at desc
-    limit 10
-  ) matched
-  cross join lateral public.get_user_public_profile(matched.id) g;
+        when v_partial then right(p.phone_digits, length(v_suffix)) = v_suffix
+        else p.phone_digits = any(v_forms)
+      end
+    )
+  order by
+    case
+      when not v_partial and p.phone_digits = any(v_forms) then 0
+      else 1
+    end,
+    p.updated_at desc
+  limit 10;
 end;
 $$;
 
+-- صلاحيات صريحة: لا anon ولا PUBLIC. الدالة تتحقق أيضاً من auth.uid() كخط دفاع ثانٍ.
+revoke all on function public.search_user_by_phone(text) from public, anon;
 grant execute on function public.search_user_by_phone(text) to authenticated;
 
 -- ============================================================================
--- 4) (اختياري) معاينة أفضل للرسائل التي تحمل ملصقاً في قائمة المحادثات
---    يستبدل دالة موجودة بنفس المنطق + سطر واحد للملصقات. آمن ولا يغيّر أي بيانات.
+-- 4) صلاحيات دالة الملف العام get_user_public_profile
+--    لا نغيّر تعريفها هنا. التعريف الحالي في schema.sql يعيد حقولاً عامة فقط
+--    ويطبّق خصوصية الصورة/آخر ظهور/الحالة. نمنع anon وPUBLIC صراحةً، ونبقي
+--    authenticated للواجهة وservice_role لخدمة الإشعارات.
+-- ============================================================================
+revoke all on function public.get_user_public_profile(uuid) from public, anon;
+grant execute on function public.get_user_public_profile(uuid) to authenticated, service_role;
+
+-- ============================================================================
+-- 5) معاينة أفضل للرسائل التي تحمل ملصقاً في قائمة المحادثات
+--    مقارنة مع التعريف الحالي في schema.sql:
+--      - التعريف الحالي لا يحتوي فرع الملصق، ويعرض «📷 صورة» لرسائل الملصقات.
+--      - النسخة أدناه مطابقة حرفياً للتعريف الحالي باستثناء إضافة فرع واحد
+--        للملصق. لا تغيير في عدّاد غير المقروء أو أي منطق آخر.
+--    هذا التغيير ضروري لأن الملصقات تُرسل كرسائل type='image' مع
+--    metadata.sticker=true، وبدونه تظهر المعاينة كصورة عادية.
 -- ============================================================================
 create or replace function public.handle_new_message()
 returns trigger
@@ -200,7 +392,7 @@ declare
 begin
   v_preview := case
     when new.deleted_at is not null then ''
-    when new.metadata->>'sticker' = 'true' then '🎨 ملصق'
+    when new.metadata @> '{"sticker": true}'::jsonb then '🎨 ملصق'
     when new.type = 'text' then left(coalesce(new.body, ''), 140)
     when new.type = 'image' then '📷 صورة'
     when new.type = 'video' then '🎬 فيديو'
@@ -227,8 +419,24 @@ end;
 $$;
 
 -- ============================================================================
--- تحقق سريع بعد التطبيق (اختياري): يجب أن يعيد صفاً واحداً لكل عنصر
+-- 6) تحقق سريع بعد التطبيق (اختياري، قراءة فقط)
 -- ============================================================================
--- select to_regclass('public.user_stickers') as stickers_table;
--- select id, public from storage.buckets where id = 'stickers';
--- select proname from pg_proc where proname = 'search_user_by_phone';
+-- select id, public, file_size_limit, allowed_mime_types
+--   from storage.buckets where id = 'stickers';
+--
+-- select id, user_id, bucket, path
+--   from public.user_stickers
+--  where bucket <> 'stickers'
+--     or path not like user_id::text || '/%'
+--     or position('..' in path) > 0
+--  limit 50;
+--
+-- select
+--   has_function_privilege('anon', 'public.search_user_by_phone(text)', 'execute') as anon_can_search,
+--   has_function_privilege('authenticated', 'public.search_user_by_phone(text)', 'execute') as auth_can_search,
+--   has_function_privilege('anon', 'public.get_user_public_profile(uuid)', 'execute') as anon_can_profile,
+--   has_function_privilege('service_role', 'public.get_user_public_profile(uuid)', 'execute') as service_can_profile;
+--
+-- select pg_get_functiondef('public.handle_new_message()'::regprocedure);
+
+commit;
